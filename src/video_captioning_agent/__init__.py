@@ -62,6 +62,7 @@ from .styles import (
     filter_supported_styles,
 )
 from .result_writer import OUTPUT_RESULTS_PATH, build_task_result, write_results
+from .pipeline import run_pipeline
 from .video_inspection import (
     VideoInspectionFailure,
     VideoInspectionFailureKind,
@@ -117,6 +118,7 @@ __all__ = [
     "build_task_result",
     "build_style_request",
     "parse_cvr_response",
+    "run_pipeline",
     "load_tasks",
     "determine_task_eligibility",
     "download_video",
