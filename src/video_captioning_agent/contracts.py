@@ -97,19 +97,34 @@ class FrameSample:
     """A timestamped JPEG frame supplied to the vision model."""
 
     frame_index: int
-    timestamp_seconds: float
+    timestamp_seconds: float | None
     image_data_url: str
+    timestamp_label: str | None = None
 
     def __post_init__(self) -> None:
         _require_non_negative_int(self.frame_index, "frame_index")
-        _require_non_negative_number(self.timestamp_seconds, "timestamp_seconds")
+        if self.timestamp_seconds is None:
+            _require_string(self.timestamp_label, "timestamp_label")
+        else:
+            _require_non_negative_number(self.timestamp_seconds, "timestamp_seconds")
+            if self.timestamp_label is not None:
+                _require_string(self.timestamp_label, "timestamp_label")
         _require_string(self.image_data_url, "image_data_url")
+
+    @property
+    def display_timestamp(self) -> str:
+        """Return an honest label for downstream CVR prompt construction."""
+
+        if self.timestamp_label is not None:
+            return self.timestamp_label
+        return f"{self.timestamp_seconds:.1f}s"
 
     def to_dict(self) -> dict[str, object]:
         return {
             "frame_index": self.frame_index,
             "timestamp_seconds": self.timestamp_seconds,
             "image_data_url": self.image_data_url,
+            "timestamp_label": self.timestamp_label,
         }
 
 

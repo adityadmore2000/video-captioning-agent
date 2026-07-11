@@ -15,6 +15,7 @@ from .downloader import (
     DownloadResult,
     download_video,
 )
+from .frame_sampler import FrameSamplingError, sample_frames
 from .styles import (
     SUPPORTED_STYLES,
     StyleSelection,
@@ -35,6 +36,7 @@ __all__ = [
     "DownloadFailure",
     "DownloadFailureKind",
     "DownloadResult",
+    "FrameSamplingError",
     "FrameSample",
     "InputLoadResult",
     "SUPPORTED_STYLES",
@@ -49,6 +51,7 @@ __all__ = [
     "load_tasks",
     "determine_task_eligibility",
     "download_video",
+    "sample_frames",
     "filter_supported_styles",
     "inspect_video",
 ]

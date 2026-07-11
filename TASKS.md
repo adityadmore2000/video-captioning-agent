@@ -32,6 +32,9 @@ Source requirements: `video_captioning_agent_spec.md`, `DESIGN.md`, and `AGENTS.
 - **Output folder handling:** The pipeline must create `/output` if it does not already exist before writing `results.json`.
 - **Runtime benchmark:** Spec's hard cap is 10 minutes total. Use DESIGN.md §7's own estimate (~25s/task, ~4-5 min for a 10-task batch) as the representative smoke-test workload for Task 15.
 - **Caption factuality enforcement:** Deferred — see "Future Scope" at the end of this document. No programmatic verifier will be built in this implementation pass; captions will rely on prompt design + CVR-only input isolation (Task 10) as the primary safeguard.
+- **Short or degraded-video frame counts:** When uniform sampling or the 1 fps fallback yields fewer than `target_frames` unique readable frames, return those unique frames as-is. Do not duplicate frames to pad the count.
+- **Frame-sampler configuration:** Expose `target_frames` (default `16`) and `max_resolution` (default `768`) as frame-sampler parameters so experiment configuration can vary them without code changes.
+- **Sampling without timing metadata:** When both FPS and usable frame-count metadata are unavailable, sequential fallback retains at most `target_frames` frames evenly spaced by read order. These frames use ordinal labels such as `frame 3 of 16, exact timing unavailable` in later CVR prompts instead of fabricated timestamps.
 
 ## 1. Define the task, frame, CVR, and result data contracts
 **Depends on:** none
@@ -217,10 +220,7 @@ Run a representative multi-task smoke test, record elapsed time and image size, 
 
 ## Remaining Minor Open Items
 
-Everything major has been resolved (see Decisions above). Two small items are still loosely defined and can be settled just-in-time when their tasks are reached, without blocking earlier work:
-
-- **Frame-sampling behavior for very short or metadata-corrupt videos:** The 1 fps fallback (DESIGN.md §3.1) is defined, but duplicate-frame handling and behavior when duration/FPS are both unavailable aren't spelled out. Resolve when implementing Task 6.
-- **`target_frames` as constant vs. config:** DESIGN.md §5 notes frame count could go from 16 to 24 if testing reveals temporal gaps. Decide whether this is a hardcoded constant or an exposed config value when implementing Task 6.
+Everything major and all currently identified minor items have been resolved (see Decisions above).
 
 ## Future Scope
 
