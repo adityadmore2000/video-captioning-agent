@@ -7,11 +7,14 @@ from .contracts import (
     VideoMetadata,
     VideoTask,
 )
+from .input_loader import InputLoadResult, load_tasks
 
 __all__ = [
     "CanonicalVideoReport",
     "FrameSample",
+    "InputLoadResult",
     "TaskResult",
     "VideoMetadata",
     "VideoTask",
+    "load_tasks",
 ]
