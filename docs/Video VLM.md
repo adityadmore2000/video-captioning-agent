@@ -1,4 +1,4 @@
-multimodal AI model that accepts **video + text** as input and produces **text** (or other structured outputs). Unlike traditional video captioning models, Video VLMs are general-purpose: they can caption videos, answer questions, summarize events, retrieve information, and perform temporal reasoning.
+zmultimodal AI model that accepts **video + text** as input and produces **text** (or other structured outputs). Unlike traditional video captioning models, Video VLMs are general-purpose: they can caption videos, answer questions, summarize events, retrieve information, and perform temporal reasoning.
 
 
 # video vlm benchmarks

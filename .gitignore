@@ -1,3 +1,7 @@
 .obsidian
 .trash
 .env*
+Data/
+.venv/
+firectl
+__pycache__
