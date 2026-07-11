@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+import stat
 
 from video_captioning_agent.contracts import VideoTask
 from video_captioning_agent.result_writer import build_task_result, write_results
@@ -28,6 +29,7 @@ def test_write_results_creates_valid_json_and_output_directory(tmp_path: Path) -
             },
         }
     ]
+    assert stat.S_IMODE(output_path.stat().st_mode) == 0o644
 
 
 def test_result_covers_only_requested_styles_and_keeps_missing_requested_caption(tmp_path: Path) -> None:

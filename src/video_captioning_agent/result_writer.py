@@ -48,6 +48,7 @@ def write_results(
             output_file.flush()
             os.fsync(output_file.fileno())
         os.replace(temporary_path, output_path)
+        os.chmod(output_path, 0o644)
     except OSError:
         temporary_path.unlink(missing_ok=True)
         raise

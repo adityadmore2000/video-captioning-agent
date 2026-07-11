@@ -1,0 +1,11 @@
+.git/
+.venv/
+.ipynb_checkpoints/
+Data/
+docs/
+tests/
+*.ipynb
+__pycache__/
+*.py[cod]
+.env*
+firectl
