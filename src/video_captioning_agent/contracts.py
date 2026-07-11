@@ -232,7 +232,8 @@ class TaskResult:
             raise ContractValidationError("captions must be a mapping of styles to strings")
         for style, caption in self.captions.items():
             _require_string(style, "captions style")
-            _require_string(caption, f"captions[{style}]")
+            if not isinstance(caption, str):
+                raise ContractValidationError(f"captions[{style}] must be a string")
 
     def to_dict(self) -> dict[str, object]:
         return {"task_id": self.task_id, "captions": dict(self.captions)}

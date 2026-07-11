@@ -36,6 +36,7 @@ Source requirements: `video_captioning_agent_spec.md`, `DESIGN.md`, and `AGENTS.
 - **Frame-sampler configuration:** Expose `target_frames` (default `16`) and `max_resolution` (default `768`) as frame-sampler parameters so experiment configuration can vary them without code changes.
 - **Sampling without timing metadata:** When both FPS and usable frame-count metadata are unavailable, sequential fallback retains at most `target_frames` frames evenly spaced by read order. These frames use ordinal labels such as `frame 3 of 16, exact timing unavailable` in later CVR prompts instead of fabricated timestamps.
 - **Caption concision validation:** Caption length is a soft quality guideline, not a hard acceptance threshold. Accept non-empty captions for requested styles; log a warning, without rejecting the caption or task, when output exceeds approximately 100 words.
+- **Partial-result caption coverage:** Each task result includes exactly its supported requested styles, using the finalized lowercase/snake_case keys. If a requested caption is missing or fails, include that key with an empty string; do not include styles the task did not request.
 
 ## 1. Define the task, frame, CVR, and result data contracts
 **Depends on:** none

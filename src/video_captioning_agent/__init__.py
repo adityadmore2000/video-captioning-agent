@@ -55,11 +55,13 @@ from .style_generator import (
 )
 from .styles import (
     SUPPORTED_STYLES,
+    STYLE_OUTPUT_KEYS,
     StyleSelection,
     TaskProcessingOutcome,
     determine_task_eligibility,
     filter_supported_styles,
 )
+from .result_writer import OUTPUT_RESULTS_PATH, build_task_result, write_results
 from .video_inspection import (
     VideoInspectionFailure,
     VideoInspectionFailureKind,
@@ -90,7 +92,9 @@ __all__ = [
     "FrameSample",
     "InputLoadResult",
     "LONG_CAPTION_WORD_WARNING_THRESHOLD",
+    "OUTPUT_RESULTS_PATH",
     "SUPPORTED_STYLES",
+    "STYLE_OUTPUT_KEYS",
     "StyleSelection",
     "CaptionGenerationFailure",
     "CaptionGenerationResult",
@@ -110,6 +114,7 @@ __all__ = [
     "VISION_MODEL_ID",
     "VISION_TEMPERATURE",
     "build_cvr_request",
+    "build_task_result",
     "build_style_request",
     "parse_cvr_response",
     "load_tasks",
@@ -119,5 +124,6 @@ __all__ = [
     "filter_supported_styles",
     "generate_requested_captions",
     "validate_captions",
+    "write_results",
     "inspect_video",
 ]

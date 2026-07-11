@@ -16,6 +16,12 @@ SUPPORTED_STYLES = (
     "Humorous-Non-Tech",
 )
 _SUPPORTED_STYLE_SET = frozenset(SUPPORTED_STYLES)
+STYLE_OUTPUT_KEYS = {
+    "Formal": "formal",
+    "Sarcastic": "sarcastic",
+    "Humorous-Tech": "humorous_tech",
+    "Humorous-Non-Tech": "humorous_non_tech",
+}
 
 
 class TaskProcessingOutcome(str, Enum):
