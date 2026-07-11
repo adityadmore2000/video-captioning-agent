@@ -24,6 +24,13 @@ from .cvr_parser import (
     CvrParseResult,
     parse_cvr_response,
 )
+from .caption_validation import (
+    LONG_CAPTION_WORD_WARNING_THRESHOLD,
+    CaptionValidationFailure,
+    CaptionValidationFailureKind,
+    CaptionValidationResult,
+    validate_captions,
+)
 from .input_loader import InputLoadResult, load_tasks
 from .downloader import (
     DEFAULT_DOWNLOAD_TIMEOUT_SECONDS,
@@ -34,6 +41,8 @@ from .downloader import (
 )
 from .frame_sampler import FrameSamplingError, sample_frames
 from .style_generator import (
+    CaptionGenerationFailure,
+    CaptionGenerationResult,
     DEFAULT_STYLE_TIMEOUT_SECONDS,
     STYLE_MAX_TOKENS,
     STYLE_SYSTEM_PROMPT,
@@ -60,6 +69,9 @@ from .video_inspection import (
 
 __all__ = [
     "CanonicalVideoReport",
+    "CaptionValidationFailure",
+    "CaptionValidationFailureKind",
+    "CaptionValidationResult",
     "CVR_SYSTEM_PROMPT",
     "CvrGenerationError",
     "CvrParseFailure",
@@ -77,8 +89,11 @@ __all__ = [
     "FireworksStyleClient",
     "FrameSample",
     "InputLoadResult",
+    "LONG_CAPTION_WORD_WARNING_THRESHOLD",
     "SUPPORTED_STYLES",
     "StyleSelection",
+    "CaptionGenerationFailure",
+    "CaptionGenerationResult",
     "StyleCaptionClient",
     "StyleGenerationError",
     "STYLE_MAX_TOKENS",
@@ -103,5 +118,6 @@ __all__ = [
     "sample_frames",
     "filter_supported_styles",
     "generate_requested_captions",
+    "validate_captions",
     "inspect_video",
 ]

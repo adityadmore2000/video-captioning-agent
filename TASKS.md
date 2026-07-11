@@ -35,6 +35,7 @@ Source requirements: `video_captioning_agent_spec.md`, `DESIGN.md`, and `AGENTS.
 - **Short or degraded-video frame counts:** When uniform sampling or the 1 fps fallback yields fewer than `target_frames` unique readable frames, return those unique frames as-is. Do not duplicate frames to pad the count.
 - **Frame-sampler configuration:** Expose `target_frames` (default `16`) and `max_resolution` (default `768`) as frame-sampler parameters so experiment configuration can vary them without code changes.
 - **Sampling without timing metadata:** When both FPS and usable frame-count metadata are unavailable, sequential fallback retains at most `target_frames` frames evenly spaced by read order. These frames use ordinal labels such as `frame 3 of 16, exact timing unavailable` in later CVR prompts instead of fabricated timestamps.
+- **Caption concision validation:** Caption length is a soft quality guideline, not a hard acceptance threshold. Accept non-empty captions for requested styles; log a warning, without rejecting the caption or task, when output exceeds approximately 100 words.
 
 ## 1. Define the task, frame, CVR, and result data contracts
 **Depends on:** none
@@ -167,7 +168,7 @@ Validate that each requested caption is non-empty, concise, and associated with 
 - Captions remain concise and readable (approximately one to two sentences).
 - Handles missing requested styles and style conflicts with factual accuracy.
 
-**Independent verification:** Add pytest tests for empty responses, missing style results, deterministic request parameters, and caption length/sentence validation. The exact fact-preservation verifier is an open question below.
+**Independent verification:** Add pytest tests for empty responses, missing style results, deterministic request parameters, and the non-fatal warning for a caption exceeding approximately 100 words. The exact fact-preservation verifier is an open question below.
 
 ## 12. Serialize results atomically and validate JSON
 **Depends on:** tasks 1, 3, and 11

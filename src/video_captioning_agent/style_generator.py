@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from dataclasses import dataclass
 from typing import Protocol, Sequence
 
 import requests
@@ -23,6 +24,22 @@ claims. Produce one or two readable sentences in the requested style."""
 
 class StyleGenerationError(RuntimeError):
     """Raised when Fireworks returns no usable caption text."""
+
+
+@dataclass(frozen=True, slots=True)
+class CaptionGenerationFailure:
+    """One non-fatal model failure associated with its requested style."""
+
+    style: str
+    message: str
+
+
+@dataclass(frozen=True, slots=True)
+class CaptionGenerationResult:
+    """Successful raw captions plus failures isolated by requested style."""
+
+    captions: dict[str, str]
+    failures: tuple[CaptionGenerationFailure, ...]
 
 
 class StyleCaptionClient(Protocol):
@@ -98,12 +115,16 @@ def generate_requested_captions(
     client: StyleCaptionClient,
     report: CanonicalVideoReport,
     requested_styles: Sequence[str],
-) -> dict[str, str]:
-    """Generate one caption for each requested supported style from one CVR."""
+) -> CaptionGenerationResult:
+    """Generate captions while isolating expected model failures by style."""
 
     supported_styles, _ = filter_supported_styles(requested_styles)
     cvr_json = report.to_json()
-    return {
-        style: client.generate_caption(cvr_json, style)
-        for style in supported_styles
-    }
+    captions: dict[str, str] = {}
+    failures: list[CaptionGenerationFailure] = []
+    for style in supported_styles:
+        try:
+            captions[style] = client.generate_caption(cvr_json, style)
+        except (requests.RequestException, StyleGenerationError) as error:
+            failures.append(CaptionGenerationFailure(style=style, message=str(error)))
+    return CaptionGenerationResult(captions=captions, failures=tuple(failures))
