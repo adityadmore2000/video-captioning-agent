@@ -22,6 +22,12 @@ from .styles import (
     determine_task_eligibility,
     filter_supported_styles,
 )
+from .video_inspection import (
+    VideoInspectionFailure,
+    VideoInspectionFailureKind,
+    VideoInspectionResult,
+    inspect_video,
+)
 
 __all__ = [
     "CanonicalVideoReport",
@@ -36,9 +42,13 @@ __all__ = [
     "TaskResult",
     "TaskProcessingOutcome",
     "VideoMetadata",
+    "VideoInspectionFailure",
+    "VideoInspectionFailureKind",
+    "VideoInspectionResult",
     "VideoTask",
     "load_tasks",
     "determine_task_eligibility",
     "download_video",
     "filter_supported_styles",
+    "inspect_video",
 ]
