@@ -18,6 +18,12 @@ from .cvr_client import (
     FireworksCvrClient,
     build_cvr_request,
 )
+from .cvr_parser import (
+    CvrParseFailure,
+    CvrParseFailureKind,
+    CvrParseResult,
+    parse_cvr_response,
+)
 from .input_loader import InputLoadResult, load_tasks
 from .downloader import (
     DEFAULT_DOWNLOAD_TIMEOUT_SECONDS,
@@ -45,6 +51,9 @@ __all__ = [
     "CanonicalVideoReport",
     "CVR_SYSTEM_PROMPT",
     "CvrGenerationError",
+    "CvrParseFailure",
+    "CvrParseFailureKind",
+    "CvrParseResult",
     "DEFAULT_VISION_TIMEOUT_SECONDS",
     "DEFAULT_DOWNLOAD_TIMEOUT_SECONDS",
     "DownloadFailure",
@@ -68,6 +77,7 @@ __all__ = [
     "VISION_MODEL_ID",
     "VISION_TEMPERATURE",
     "build_cvr_request",
+    "parse_cvr_response",
     "load_tasks",
     "determine_task_eligibility",
     "download_video",
