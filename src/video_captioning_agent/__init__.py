@@ -8,6 +8,13 @@ from .contracts import (
     VideoTask,
 )
 from .input_loader import InputLoadResult, load_tasks
+from .downloader import (
+    DEFAULT_DOWNLOAD_TIMEOUT_SECONDS,
+    DownloadFailure,
+    DownloadFailureKind,
+    DownloadResult,
+    download_video,
+)
 from .styles import (
     SUPPORTED_STYLES,
     StyleSelection,
@@ -18,6 +25,10 @@ from .styles import (
 
 __all__ = [
     "CanonicalVideoReport",
+    "DEFAULT_DOWNLOAD_TIMEOUT_SECONDS",
+    "DownloadFailure",
+    "DownloadFailureKind",
+    "DownloadResult",
     "FrameSample",
     "InputLoadResult",
     "SUPPORTED_STYLES",
@@ -28,5 +39,6 @@ __all__ = [
     "VideoTask",
     "load_tasks",
     "determine_task_eligibility",
+    "download_video",
     "filter_supported_styles",
 ]
