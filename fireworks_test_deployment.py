@@ -19,7 +19,7 @@ import cv2
 import requests
 load_dotenv()  # load FIREWORKS_API_KEY from .env if present
 FIREWORKS_URL = "https://api.fireworks.ai/inference/v1/chat/completions"
-MODEL_ID = "accounts/adityadmore2000-x698/deployments/qled7m69"
+MODEL_ID = "accounts/adityadmore2000-x698/deployments/dzcxfs49"
 
 API_KEY = os.environ.get("FIREWORKS_API_KEY")
 if not API_KEY:

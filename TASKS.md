@@ -24,19 +24,15 @@ Source requirements: `video_captioning_agent_spec.md`, `DESIGN.md`, and `AGENTS.
     }
   ]
   ```
-  A top-level JSON array, one object per input task, with a `captions` dict keyed by lowercase/snake_case style name.
+  A top-level JSON array, one object per input task. The `captions` dict includes **only the styles that specific task requested** — not always all four keys (this matches the spec's "missing styles score zero" wording, which is scoped per requested style, not to the full 4-style universe). If a requested style's caption failed to generate, its key is still present with an empty string value (so it's scored as zero, not silently absent); styles never requested for that task do not appear in the object at all.
 - **Duplicate task IDs:** Not expected from valid input. If encountered anyway, treat the same as other invalid/malformed input (do not crash) — log and skip the offending task(s) rather than guessing which one is authoritative.
-- **Text-generation model:** Use `Qwen2.5-VL 32B Instruct` (same model as vision understanding, called in text-only mode) for style generation — no separate model needed.
+- **Text-generation model:** Use `gpt-oss-120b` (hosted on Fireworks) for style generation. This replaces the earlier plan to reuse `Qwen2.5-VL 32B Instruct` in text-only mode — `Qwen2.5-VL 32B Instruct` remains the vision/CVR-generation model (Task 7), unchanged.
 - **Fireworks API endpoint:** `FIREWORKS_URL = "https://api.fireworks.ai/inference/v1/chat/completions"`.
 - **Audio:** Out of scope. Visual-only captioning.
 - **Output folder handling:** The pipeline must create `/output` if it does not already exist before writing `results.json`.
 - **Runtime benchmark:** Spec's hard cap is 10 minutes total. Use DESIGN.md §7's own estimate (~25s/task, ~4-5 min for a 10-task batch) as the representative smoke-test workload for Task 15.
 - **Caption factuality enforcement:** Deferred — see "Future Scope" at the end of this document. No programmatic verifier will be built in this implementation pass; captions will rely on prompt design + CVR-only input isolation (Task 10) as the primary safeguard.
-- **Short or degraded-video frame counts:** When uniform sampling or the 1 fps fallback yields fewer than `target_frames` unique readable frames, return those unique frames as-is. Do not duplicate frames to pad the count.
-- **Frame-sampler configuration:** Expose `target_frames` (default `16`) and `max_resolution` (default `768`) as frame-sampler parameters so experiment configuration can vary them without code changes.
-- **Sampling without timing metadata:** When both FPS and usable frame-count metadata are unavailable, sequential fallback retains at most `target_frames` frames evenly spaced by read order. These frames use ordinal labels such as `frame 3 of 16, exact timing unavailable` in later CVR prompts instead of fabricated timestamps.
-- **Caption concision validation:** Caption length is a soft quality guideline, not a hard acceptance threshold. Accept non-empty captions for requested styles; log a warning, without rejecting the caption or task, when output exceeds approximately 100 words.
-- **Partial-result caption coverage:** Each task result includes exactly its supported requested styles, using the finalized lowercase/snake_case keys. If a requested caption is missing or fails, include that key with an empty string; do not include styles the task did not request.
+- **Style generation always runs unconditionally for all 4 supported styles, regardless of what a task requested.** Task 10 takes a CVR and returns all 4 style → caption pairs every time, with no awareness of a task's requested-styles list. Filtering down to only the styles a specific task actually requested happens exclusively at result-serialization (Task 12), which already implements this filter. This keeps Task 10 simple (one code path, no conditional branching per requested style) at the cost of generating up to 3 unused captions per task when fewer than 4 styles were requested — an accepted trade-off given the low cost/latency of short text generation relative to the pipeline's overall runtime budget. Task 3 correspondingly becomes pure input validation (confirming requested styles are within the supported set) rather than a gate on what gets generated.
 
 ## 1. Define the task, frame, CVR, and result data contracts
 **Depends on:** none
@@ -44,7 +40,7 @@ Source requirements: `video_captioning_agent_spec.md`, `DESIGN.md`, and `AGENTS.
 Create typed, serializable representations for an input task, sampled frame, video metadata, the Canonical Video Report (CVR), and a task result. Make the CVR contract include `scene`, `primary_subjects`, `important_objects`, `timeline`, and `overall_summary`.
 
 **Acceptance criteria (from the specification):**
-- The CVR captures scene, primary subjects, important objects, key actions, a timeline of major events, and an overall factual summary. Key actions are represented by timestamped `timeline` entries; the DESIGN.md §4.2 five-field schema intentionally has no separate `key_actions` field.
+- The CVR captures scene, primary subjects, important objects, key actions, a timeline of major events, and an overall factual summary.
 - The CVR is an internal artifact and is not included in the final submission.
 
 **Independent verification:** Add pytest unit tests for valid serialization and rejection of malformed CVR data.
@@ -64,7 +60,7 @@ Read `/input/tasks.json`, parse multiple tasks, and validate the presence and ty
 ## 3. Define supported-style filtering and task eligibility
 **Depends on:** tasks 1–2
 
-Implement the supported style set: Formal, Sarcastic, Humorous-Tech, and Humorous-Non-Tech. This is the complete, exhaustive set of styles input tasks are expected to request (see Decisions). Validate/filter requested styles defensively and define a task-level processing outcome for tasks with no supported styles after filtering, even though this path is not expected to trigger given valid upstream input.
+Implement the supported style set: Formal, Sarcastic, Humorous-Tech, and Humorous-Non-Tech. This is the complete, exhaustive set of styles input tasks are expected to request (see Decisions). This task is **pure input validation** — it does not gate what Task 10 generates (Task 10 always generates all 4 styles unconditionally; see Decisions). Validate each task's requested styles against the supported set defensively, and define a task-level processing outcome for tasks with no valid requested styles after validation, even though this path is not expected to trigger given valid upstream input. The validated requested-styles list is consumed by Task 12 as its output filter.
 
 **Acceptance criteria (from the specification):**
 - Generates one caption for every requested style.
@@ -148,33 +144,33 @@ Test the CVR-prompt construction to ensure it directs the model to describe obse
 ## 10. Implement CVR-only style-generation requests
 **Depends on:** tasks 1, 3, and 8
 
-For each supported requested style, send only the serialized CVR and target style to a text-generation client (Qwen2.5-VL 32B Instruct in text-only mode, per Decisions). Do not expose frame data, video URLs, or video metadata to this stage. Use `temperature=0.2` (lowered from DESIGN.md's original `0.7`) to satisfy the spec's determinism requirement.
+For **all 4 supported styles, unconditionally** (not just a task's requested subset — see Decisions), send only the serialized CVR and target style to a text-generation client (`gpt-oss-120b`, per Decisions). This stage does not read or check a task's requested-styles list at all; it always returns a dict of all 4 style → caption pairs. Do not expose frame data, video URLs, or video metadata to this stage. Use `temperature=0.2` (lowered from DESIGN.md's original `0.7`) to satisfy the spec's determinism requirement.
 
 **Acceptance criteria (from the specification):**
-- Generates one caption for every requested style using the Canonical Video Report as the only source of factual information.
+- Generates all 4 supported-style captions using the Canonical Video Report as the only source of factual information (Task 12 filters this down to each task's requested styles at output time — see Decisions).
 - The Canonical Video Report is reused for generating every caption style.
 - The system treats video understanding and language generation as independent stages.
 
-**Independent verification:** Add pytest tests that mock the text model and assert one request per requested supported style, all using the same CVR, with no visual input in any style request.
+**Independent verification:** Add pytest tests that mock the text model and assert exactly 4 requests per CVR (one per supported style), all using the same CVR, with no visual input in any style request.
 
 ## 11. Validate generated captions against output requirements
 **Depends on:** task 10
 
-Validate that each requested caption is non-empty, concise, and associated with its requested style. Add deterministic request construction and response validation; record model failures per caption without ending unrelated work.
+Validate that each of the 4 generated captions is non-empty and correctly associated with its style. Add deterministic request construction and response validation; record model failures per caption without ending unrelated work. Concision is enforced only as a loose sanity check, not a hard gate: log a warning if a caption exceeds roughly 100 words (to catch clearly broken/runaway model output), but do not reject or fail the task for length alone — the spec's "approximately one to two sentences" is a soft guideline, not a precise threshold worth strict enforcement.
 
 **Acceptance criteria (from the specification):**
 - Captions preserve facts contained in the CVR.
 - Humor may introduce creative phrasing but must not introduce new factual claims.
 - Captions clearly express the requested writing style.
-- Captions remain concise and readable (approximately one to two sentences).
+- Captions remain concise and readable (approximately one to two sentences) — treated as a soft guideline (see above), not a hard validation failure.
 - Handles missing requested styles and style conflicts with factual accuracy.
 
-**Independent verification:** Add pytest tests for empty responses, missing style results, deterministic request parameters, and the non-fatal warning for a caption exceeding approximately 100 words. The exact fact-preservation verifier is an open question below.
+**Independent verification:** Add pytest tests for empty responses, missing style results, deterministic request parameters, and a runaway-length warning case (not a failure case). The exact fact-preservation verifier is an open question below (see Future Scope).
 
 ## 12. Serialize results atomically and validate JSON
 **Depends on:** tasks 1, 3, and 11
 
-Serialize completed task captions to `/output/results.json` as a JSON array of `{"task_id": ..., "captions": {"formal": ..., "sarcastic": ..., "humorous_tech": ..., "humorous_non_tech": ...}}` objects (see Decisions for the finalized schema). Create the `/output` directory if it does not exist, then write atomically. Validate the serialized document before the process completes.
+Serialize completed task captions to `/output/results.json`. This task is the **sole point in the pipeline** where a task's requested-styles list is used to filter Task 10's always-complete 4-style output down to just the styles that task actually requested (see Decisions). Output is a JSON array of `{"task_id": ..., "captions": {...}}` objects, where `captions` contains only the requested styles' keys — a requested-but-failed caption still appears with an empty string value; a never-requested style does not appear at all. Create the `/output` directory if it does not exist, then write atomically. Validate the serialized document before the process completes.
 
 **Acceptance criteria (from the specification):**
 - Writes valid `/output/results.json` before exiting.
@@ -222,7 +218,10 @@ Run a representative multi-task smoke test, record elapsed time and image size, 
 
 ## Remaining Minor Open Items
 
-Everything major and all currently identified minor items have been resolved (see Decisions above).
+Everything major has been resolved (see Decisions above). Two small items are still loosely defined and can be settled just-in-time when their tasks are reached, without blocking earlier work:
+
+- **Frame-sampling behavior for very short or metadata-corrupt videos:** The 1 fps fallback (DESIGN.md §3.1) is defined, but duplicate-frame handling and behavior when duration/FPS are both unavailable aren't spelled out. Resolve when implementing Task 6.
+- **`target_frames` as constant vs. config:** DESIGN.md §5 notes frame count could go from 16 to 24 if testing reveals temporal gaps. Decide whether this is a hardcoded constant or an exposed config value when implementing Task 6.
 
 ## Future Scope
 
