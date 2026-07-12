@@ -9,7 +9,7 @@ from typing import Callable, Sequence
 
 import requests
 
-from .caption_validation import validate_captions
+from .caption_validation import validate_all_captions
 from .contracts import FrameSample, TaskResult, VideoMetadata, VideoTask
 from .cvr_client import CvrGenerationError, FireworksCvrClient
 from .cvr_parser import parse_cvr_response
@@ -20,7 +20,7 @@ from .result_writer import OUTPUT_RESULTS_PATH, build_task_result, write_results
 from .style_generator import (
     FireworksStyleClient,
     StyleCaptionClient,
-    generate_requested_captions,
+    generate_all_captions,
 )
 from .styles import determine_task_eligibility
 from .video_inspection import VideoInspectionResult, inspect_video
@@ -111,8 +111,11 @@ def _process_task(
         if not parsed_cvr.succeeded or parsed_cvr.report is None:
             return build_task_result(task, {})
 
-        generation = generate_requested_captions(style_client, parsed_cvr.report, task.styles)
-        validation = validate_captions(task.styles, generation.captions)
+        # Task 10: generate all 4 supported styles unconditionally from the CVR. Task 11
+        # validates that full 4-style set. Task 12 (build_task_result) then filters the
+        # validated captions down to just this task's requested styles for output.
+        generation = generate_all_captions(style_client, parsed_cvr.report)
+        validation = validate_all_captions(generation.captions)
         return build_task_result(task, validation.captions)
     except (CvrGenerationError, FrameSamplingError, requests.RequestException, OSError) as error:
         LOGGER.warning("Task %s failed: %s", task.task_id, error)

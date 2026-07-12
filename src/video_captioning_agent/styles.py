@@ -1,4 +1,12 @@
-"""Supported caption-style selection and task eligibility."""
+"""Supported caption-style input validation and task eligibility.
+
+This module is pure input validation: it confirms a task's requested styles are within
+the fixed supported set and produces a task-level eligibility outcome. It does NOT gate
+which styles Task 10 generates (Task 10 always generates all 4 supported styles
+unconditionally; see TASKS.md Decisions). The validated requested-styles list produced
+here is consumed by Task 12 as the output-time filter that selects which of Task 10's
+captions actually appear in results.json.
+"""
 
 from __future__ import annotations
 
@@ -42,10 +50,11 @@ class StyleSelection:
 
 
 def filter_supported_styles(styles: Iterable[str]) -> tuple[tuple[str, ...], tuple[str, ...]]:
-    """Return requested styles split into supported and unsupported groups.
+    """Validate requested styles by splitting them into supported and unsupported groups.
 
-    Input order is retained so later caption generation is deterministic. Unsupported
-    styles are retained in the result for logging but are never processed.
+    Input order is retained so Task 12's output serialization is deterministic. Unsupported
+    styles are retained in the result for logging/visibility but are never processed; per
+    TASKS.md Decisions this defensive path is not expected to trigger for valid input.
     """
 
     supported: list[str] = []
@@ -59,7 +68,13 @@ def filter_supported_styles(styles: Iterable[str]) -> tuple[tuple[str, ...], tup
 
 
 def determine_task_eligibility(task: VideoTask) -> StyleSelection:
-    """Determine whether *task* requests at least one supported caption style."""
+    """Determine whether *task* requests at least one supported caption style.
+
+    The returned ``supported_styles`` tuple is the validated requested-styles list that
+    Task 12 uses to filter Task 10's always-complete 4-style output down to the styles
+    this task actually requested. This is input validation only; it does not control
+    what Task 10 generates.
+    """
 
     supported_styles, ignored_styles = filter_supported_styles(task.styles)
     outcome = (

@@ -1,7 +1,11 @@
 from unittest.mock import Mock
 
+import json
+
 from video_captioning_agent.contracts import FrameSample, VideoMetadata
 from video_captioning_agent.cvr_client import (
+    CVR_SYSTEM_PROMPT,
+    CVR_USER_PROMPT_TEMPLATE,
     FIREWORKS_URL,
     VISION_MAX_TOKENS,
     VISION_MODEL_ID,
@@ -80,3 +84,54 @@ def test_cvr_client_makes_exactly_one_vision_call_per_video() -> None:
     assert call_kwargs["json"]["temperature"] == 0.1
     assert call_kwargs["json"]["max_tokens"] == 1024
     response.raise_for_status.assert_called_once_with()
+
+
+def test_default_kwargs_reproduce_constant_based_behavior_exactly() -> None:
+    """Passing no kwargs (as pipeline.py does) must yield the same request as before."""
+
+    request = build_cvr_request(_frames(), _metadata())
+
+    metadata_json = json.dumps(_metadata().to_dict(), sort_keys=True)
+    timestamp_lines = "\n".join(
+        [
+            "- Frame 1 (source frame 0): 0.0s",
+            "- Frame 2 (source frame 5): frame 2 of 3, exact timing unavailable",
+            "- Frame 3 (source frame 9): 1.8s",
+        ]
+    )
+
+    assert request["model"] == VISION_MODEL_ID
+    assert request["temperature"] == VISION_TEMPERATURE
+    assert request["max_tokens"] == VISION_MAX_TOKENS
+    assert request["messages"][0]["content"] == CVR_SYSTEM_PROMPT
+    assert request["messages"][1]["content"][0]["text"] == CVR_USER_PROMPT_TEMPLATE.format(
+        frame_count=3,
+        duration_seconds=2.0,
+        metadata_json=metadata_json,
+        timestamp_lines=timestamp_lines,
+    )
+
+
+def test_client_kwargs_override_constants_in_constructed_request() -> None:
+    session = Mock()
+    response = Mock()
+    response.json.return_value = {"choices": [{"message": {"content": "{}"}}]}
+    session.post.return_value = response
+    client = FireworksCvrClient(
+        api_key="test-key",
+        session=session,
+        system_prompt="ALT SYSTEM",
+        user_prompt_template="ALT USER {frame_count} {duration_seconds:.1f} {metadata_json} {timestamp_lines}",
+        model_id="accounts/fireworks/models/alt-model",
+        temperature=0.7,
+        max_tokens=512,
+    )
+
+    client.generate_cvr(_frames(), _metadata())
+
+    request = session.post.call_args.kwargs["json"]
+    assert request["model"] == "accounts/fireworks/models/alt-model"
+    assert request["temperature"] == 0.7
+    assert request["max_tokens"] == 512
+    assert request["messages"][0]["content"] == "ALT SYSTEM"
+    assert request["messages"][1]["content"][0]["text"].startswith("ALT USER 3 2.0 ")

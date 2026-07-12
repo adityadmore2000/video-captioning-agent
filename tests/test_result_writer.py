@@ -33,9 +33,21 @@ def test_write_results_creates_valid_json_and_output_directory(tmp_path: Path) -
 
 
 def test_result_covers_only_requested_styles_and_keeps_missing_requested_caption(tmp_path: Path) -> None:
+    """Task 12 filters Task 10's always-complete 4-style output down to requested styles.
+
+    Task 10 unconditionally supplies all 4 supported captions; here only two styles are
+    requested, one of which (Humorous-Non-Tech) is absent from the supplied map. The
+    unrequested Formal and Humorous-Tech captions are dropped entirely, the absent
+    requested style keeps its key with an empty-string value, and the present requested
+    style passes through.
+    """
     result = build_task_result(
         _task("v1", ("Sarcastic", "Humorous-Non-Tech")),
-        {"Sarcastic": "Sure, that happened.", "Formal": "Not requested."},
+        {
+            "Formal": "Not requested.",
+            "Sarcastic": "Sure, that happened.",
+            "Humorous-Tech": "Also not requested.",
+        },
     )
 
     write_results([result], tmp_path / "results.json")

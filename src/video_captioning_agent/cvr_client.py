@@ -26,61 +26,7 @@ Core Directives:
 4. TEMPORAL AWARENESS: Pay close attention to the chronological order of frames to accurately construct the timeline of events.
 5. STRICT JSON: You must output ONLY valid JSON matching the requested schema. Do not wrap the output in markdown code blocks and do not include any conversational text before or after the JSON."""
 
-
-class CvrGenerationError(RuntimeError):
-    """Raised when Fireworks returns no usable CVR text response."""
-
-
-def build_cvr_request(
-    frames: Sequence[FrameSample], metadata: VideoMetadata
-) -> dict[str, Any]:
-    """Build one multimodal CVR request with chronological frame context."""
-
-    if not frames:
-        raise ValueError("At least one frame is required to build a CVR request")
-
-    ordered_frames = sorted(frames, key=lambda frame: frame.frame_index)
-    timestamp_lines = "\n".join(
-        f"- Frame {ordinal} (source frame {frame.frame_index}): "
-        f"{frame.display_timestamp}"
-        for ordinal, frame in enumerate(ordered_frames, start=1)
-    )
-    user_prompt = _build_cvr_user_prompt(
-        frame_count=len(ordered_frames),
-        metadata=metadata,
-        timestamp_lines=timestamp_lines,
-    )
-    content: list[dict[str, Any]] = [{"type": "text", "text": user_prompt}]
-    for ordinal, frame in enumerate(ordered_frames, start=1):
-        content.extend(
-            [
-                {
-                    "type": "text",
-                    "text": (
-                        f"Frame {ordinal} (source frame {frame.frame_index}, "
-                        f"{frame.display_timestamp})"
-                    ),
-                },
-                {"type": "image_url", "image_url": {"url": frame.image_data_url}},
-            ]
-        )
-
-    return {
-        "model": VISION_MODEL_ID,
-        "temperature": VISION_TEMPERATURE,
-        "max_tokens": VISION_MAX_TOKENS,
-        "messages": [
-            {"role": "system", "content": CVR_SYSTEM_PROMPT},
-            {"role": "user", "content": content},
-        ],
-    }
-
-
-def _build_cvr_user_prompt(
-    frame_count: int, metadata: VideoMetadata, timestamp_lines: str
-) -> str:
-    metadata_json = json.dumps(metadata.to_dict(), sort_keys=True)
-    return f"""Below are {frame_count} frames sampled from a {metadata.duration_seconds:.1f}-second video, presented in chronological order.
+CVR_USER_PROMPT_TEMPLATE = """Below are {frame_count} frames sampled from a {duration_seconds:.1f}-second video, presented in chronological order.
 
 Video Metadata:
 {metadata_json}
@@ -108,25 +54,129 @@ Rules:
 - If you cannot see something clearly, do not include it."""
 
 
+class CvrGenerationError(RuntimeError):
+    """Raised when Fireworks returns no usable CVR text response."""
+
+
+def build_cvr_request(
+    frames: Sequence[FrameSample],
+    metadata: VideoMetadata,
+    *,
+    system_prompt: str = CVR_SYSTEM_PROMPT,
+    user_prompt_template: str = CVR_USER_PROMPT_TEMPLATE,
+    model_id: str = VISION_MODEL_ID,
+    temperature: float = VISION_TEMPERATURE,
+    max_tokens: int = VISION_MAX_TOKENS,
+) -> dict[str, Any]:
+    """Build one multimodal CVR request with chronological frame context.
+
+    Keyword arguments are all optional and default to the module constants, so the
+    production pipeline continues to call this function with positional frames/metadata
+    only and observes identical behavior. The experiments harness passes config-driven
+    overrides through these kwargs to swap prompts/model/parameters without reimplementing
+    request construction.
+    """
+
+    if not frames:
+        raise ValueError("At least one frame is required to build a CVR request")
+
+    ordered_frames = sorted(frames, key=lambda frame: frame.frame_index)
+    timestamp_lines = "\n".join(
+        f"- Frame {ordinal} (source frame {frame.frame_index}): "
+        f"{frame.display_timestamp}"
+        for ordinal, frame in enumerate(ordered_frames, start=1)
+    )
+    user_prompt = _build_cvr_user_prompt(
+        frame_count=len(ordered_frames),
+        metadata=metadata,
+        timestamp_lines=timestamp_lines,
+        template=user_prompt_template,
+    )
+    content: list[dict[str, Any]] = [{"type": "text", "text": user_prompt}]
+    for ordinal, frame in enumerate(ordered_frames, start=1):
+        content.extend(
+            [
+                {
+                    "type": "text",
+                    "text": (
+                        f"Frame {ordinal} (source frame {frame.frame_index}, "
+                        f"{frame.display_timestamp})"
+                    ),
+                },
+                {"type": "image_url", "image_url": {"url": frame.image_data_url}},
+            ]
+        )
+
+    return {
+        "model": model_id,
+        "temperature": temperature,
+        "max_tokens": max_tokens,
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": content},
+        ],
+    }
+
+
+def _build_cvr_user_prompt(
+    frame_count: int,
+    metadata: VideoMetadata,
+    timestamp_lines: str,
+    template: str = CVR_USER_PROMPT_TEMPLATE,
+) -> str:
+    metadata_json = json.dumps(metadata.to_dict(), sort_keys=True)
+    return template.format(
+        frame_count=frame_count,
+        duration_seconds=metadata.duration_seconds,
+        metadata_json=metadata_json,
+        timestamp_lines=timestamp_lines,
+    )
+
+
 class FireworksCvrClient:
-    """Client for one factual visual-understanding call per video."""
+    """Client for one factual visual-understanding call per video.
+
+    All prompt/model/parameter attributes are optional and default to the module
+    constants; passing none of them (as ``pipeline.py`` does) reproduces the original
+    behavior exactly. The experiments harness constructs this client with config-driven
+    overrides via these same kwargs.
+    """
 
     def __init__(
         self,
         api_key: str | None = None,
         timeout_seconds: float = DEFAULT_VISION_TIMEOUT_SECONDS,
         session: requests.Session | None = None,
+        *,
+        system_prompt: str = CVR_SYSTEM_PROMPT,
+        user_prompt_template: str = CVR_USER_PROMPT_TEMPLATE,
+        model_id: str = VISION_MODEL_ID,
+        temperature: float = VISION_TEMPERATURE,
+        max_tokens: int = VISION_MAX_TOKENS,
     ) -> None:
         self._api_key = api_key or os.environ.get("FIREWORKS_API_KEY")
         if not self._api_key:
             raise ValueError("FIREWORKS_API_KEY must be configured")
         self._timeout_seconds = timeout_seconds
         self._session = session or requests.Session()
+        self._system_prompt = system_prompt
+        self._user_prompt_template = user_prompt_template
+        self._model_id = model_id
+        self._temperature = temperature
+        self._max_tokens = max_tokens
 
     def generate_cvr(self, frames: Sequence[FrameSample], metadata: VideoMetadata) -> str:
         """Submit one vision request and return the raw CVR text for Task 8 parsing."""
 
-        request_payload = build_cvr_request(frames, metadata)
+        request_payload = build_cvr_request(
+            frames,
+            metadata,
+            system_prompt=self._system_prompt,
+            user_prompt_template=self._user_prompt_template,
+            model_id=self._model_id,
+            temperature=self._temperature,
+            max_tokens=self._max_tokens,
+        )
         response = self._session.post(
             FIREWORKS_URL,
             headers={

@@ -9,6 +9,7 @@ from .contracts import (
 )
 from .cvr_client import (
     CVR_SYSTEM_PROMPT,
+    CVR_USER_PROMPT_TEMPLATE,
     DEFAULT_VISION_TIMEOUT_SECONDS,
     FIREWORKS_URL,
     VISION_MAX_TOKENS,
@@ -29,7 +30,7 @@ from .caption_validation import (
     CaptionValidationFailure,
     CaptionValidationFailureKind,
     CaptionValidationResult,
-    validate_captions,
+    validate_all_captions,
 )
 from .input_loader import InputLoadResult, load_tasks
 from .downloader import (
@@ -45,13 +46,14 @@ from .style_generator import (
     CaptionGenerationResult,
     DEFAULT_STYLE_TIMEOUT_SECONDS,
     STYLE_MAX_TOKENS,
+    STYLE_MODEL_ID,
     STYLE_SYSTEM_PROMPT,
     STYLE_TEMPERATURE,
     FireworksStyleClient,
     StyleCaptionClient,
     StyleGenerationError,
     build_style_request,
-    generate_requested_captions,
+    generate_all_captions,
 )
 from .styles import (
     SUPPORTED_STYLES,
@@ -75,6 +77,7 @@ __all__ = [
     "CaptionValidationFailureKind",
     "CaptionValidationResult",
     "CVR_SYSTEM_PROMPT",
+    "CVR_USER_PROMPT_TEMPLATE",
     "CvrGenerationError",
     "CvrParseFailure",
     "CvrParseFailureKind",
@@ -101,6 +104,7 @@ __all__ = [
     "StyleCaptionClient",
     "StyleGenerationError",
     "STYLE_MAX_TOKENS",
+    "STYLE_MODEL_ID",
     "STYLE_SYSTEM_PROMPT",
     "STYLE_TEMPERATURE",
     "TaskResult",
@@ -122,8 +126,8 @@ __all__ = [
     "download_video",
     "sample_frames",
     "filter_supported_styles",
-    "generate_requested_captions",
-    "validate_captions",
+    "generate_all_captions",
+    "validate_all_captions",
     "write_results",
     "inspect_video",
 ]

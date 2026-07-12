@@ -1,0 +1,67 @@
+# Example experiment configuration.
+#
+# Copy this file and edit to define a variation. Run with:
+#   python experiments/run_experiment.py --config experiments/configs/exp_example.yaml
+#
+# All sections except `name` and `video_path` are optional and default to the
+# production constants from src/ (Qwen2.5-VL 32B Instruct for CVR, gpt-oss-120b
+# for style generation). Override only what you want to vary per-run.
+#
+# `system_prompt` and `user_prompt_template` may be provided inline (as below) or
+# via `system_prompt_path` / `user_prompt_template_path` pointing at a separate
+# .md / .txt file relative to this config file. Provide exactly one form per prompt.
+
+name: exp_example_baseline
+video_path: /home/aditya/dev-work/video-captioning-agent/Data/Charades_v1_480/Charades_v1_480/001YG.mp4
+
+system_prompt: |
+  You are a strict, objective video-understanding agent. Your sole purpose is to analyze
+  sequences of video frames and generate a Canonical Video Report (CVR).
+
+  Core Directives:
+  1. OBSERVABLE FACTS ONLY: Describe only what is explicitly visible in the frames.
+  2. NO SPECULATION: Do not infer emotions, intentions, or off-screen events.
+  3. NO HUMOR OR STYLE: The CVR must be completely dry, factual, and objective.
+  4. TEMPORAL AWARENESS: Pay close attention to the chronological order of frames.
+  5. STRICT JSON: Output ONLY valid JSON matching the requested schema.
+
+user_prompt_template: |
+  Below are {frame_count} frames sampled from a {duration_seconds:.1f}-second video,
+  presented in chronological order.
+
+  Video Metadata:
+  {metadata_json}
+
+  Frame Timestamps:
+  {timestamp_lines}
+
+  Analyze these frames and generate the Canonical Video Report (CVR).
+
+  Return a JSON object with EXACTLY this structure:
+  {{
+    "scene": "Brief description of the location or environment",
+    "primary_subjects": ["Entity 1", "Entity 2"],
+    "important_objects": ["Object 1", "Object 2"],
+    "timeline": ["Event 1 at timestamp X", "Event 2 at timestamp Y"],
+    "overall_summary": "A single, concise sentence summarizing the factual progression."
+  }}
+
+  Rules:
+  - Prioritize semantically important events over exhaustive background details.
+  - Only include primary subjects and important objects that are clearly visible.
+  - If you cannot see something clearly, do not include it.
+
+frame_sampling:
+  num_frames: 16
+  max_resolution: 768
+  fallback_fps: 1
+
+cvr_model:
+  name: accounts/fireworks/models/qwen2p5-vl-32b-instruct
+  temperature: 0.1
+  max_tokens: 1024
+
+style_model:
+  name: accounts/fireworks/models/gpt-oss-120b
+  temperature: 0.2
+  max_tokens: 256

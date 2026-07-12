@@ -18,9 +18,12 @@ OUTPUT_RESULTS_PATH = Path("/output/results.json")
 def build_task_result(task: VideoTask, captions: Mapping[str, object]) -> TaskResult:
     """Build a schema-compliant result containing only task-requested styles.
 
-    A missing or invalid value for a supported requested style is represented by an
-    empty string, preserving the key for downstream scoring without inventing a
-    caption. Unsupported requested styles remain excluded by the defensive filter.
+    Task 10 always hands this stage the full set of 4 supported-style captions
+    (validated by Task 11); Task 12 is the sole place that filters this down to the
+    styles the task actually requested, using ``task.styles`` as the filter. A missing
+    or invalid value for a supported requested style is represented by an empty string,
+    preserving the key for downstream scoring without inventing a caption. Styles the
+    task never requested do not appear in the output object at all.
     """
 
     requested_styles, _ = filter_supported_styles(task.styles)

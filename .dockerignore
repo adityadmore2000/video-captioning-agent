@@ -4,6 +4,7 @@
 Data/
 docs/
 tests/
+experiments/
 *.ipynb
 __pycache__/
 *.py[cod]

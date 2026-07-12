@@ -166,6 +166,60 @@ PYTHONPATH=src pytest -q
 
 No real `FIREWORKS_API_KEY` or large dataset is required. Each test file corresponds to a single pipeline stage (e.g. `test_cvr_client.py`, `test_frame_sampler.py`, `test_pipeline.py`); `test_pipeline.py` exercises the full mocked end-to-end flow including per-task failure isolation.
 
+The experiments harness has its own test suite under [`experiments/tests/`](experiments/tests/). Run both suites together from the repo root:
+
+```bash
+PYTHONPATH=src:experiments pytest tests/ experiments/tests/ -q
+```
+
+---
+
+## Experiment tracking (dev-only)
+
+A lightweight MLflow-backed harness lives under [`experiments/`](experiments/) for iterating on CVR prompts, frame-sampling parameters, and model/generation config. It is **dev-only tooling**: it is not part of the production Docker image, does not touch `/input`→`/output`, and reuses the real frame sampler (Task 6), VLM client (Task 7), and style generator (Task 10) from `src/`. Both CVR-generation and style-generation experiments are tracked in the same MLflow experiment (`video_captioning_cvr_experiments`). See [`EXPERIMENT_TRACKING.md`](EXPERIMENT_TRACKING.md) for the full spec.
+
+### Install dev dependencies
+
+```bash
+pip install -r experiments/requirements.txt   # mlflow, pyyaml
+```
+
+### Run a single experiment
+
+```bash
+export FIREWORKS_API_KEY=...
+python experiments/run_experiment.py --config experiments/configs/exp_example.yaml
+```
+
+Optional CLI overrides (avoid editing YAML for one-off variations):
+
+```bash
+python experiments/run_experiment.py --config experiments/configs/exp_example.yaml \
+    --video-path /other/clip.mp4 --num-frames 8 --max-resolution 512
+```
+
+### Run every config in a batch
+
+```bash
+python experiments/run_all.py
+```
+
+This loops sequentially over every `*.yaml`/`*.yml` file in `experiments/configs/`, logging each as its own MLflow run. A failing config logs the error and continues to the next.
+
+### View runs in the MLflow UI
+
+File-based tracking is used (no MLflow server process required):
+
+```bash
+mlflow ui --backend-store-uri ./experiments/mlruns --port 5000
+```
+
+Open `http://localhost:5000`, select the `video_captioning_cvr_experiments` experiment, and use the runs table (one row per run, params/metrics as columns) and the Compare view to diff configurations side by side. Each run's `system_prompt.txt`, `user_prompt_template.txt`, `cvr_output.json`, and `style_captions.json` are viewable as artifacts.
+
+### Config schema
+
+Each YAML config supports: `name`, `video_path`, `system_prompt` (or `system_prompt_path`), `user_prompt_template` (or `user_prompt_template_path`), `frame_sampling` (`num_frames`, `max_resolution`, `fallback_fps`), `cvr_model` (`name`, `temperature`, `max_tokens`), and `style_model` (`name`, `temperature`, `max_tokens`). See [`experiments/configs/exp_example.yaml`](experiments/configs/exp_example.yaml) for a fully annotated example. Omitted sections default to the production constants from `src/`.
+
 ---
 
 ## Project layout
@@ -175,21 +229,27 @@ No real `FIREWORKS_API_KEY` or large dataset is required. Each test file corresp
 ├── src/video_captioning_agent/
 │   ├── contracts.py          # VideoTask, CVR, FrameSample, VideoMetadata, TaskResult
 │   ├── input_loader.py       # /input/tasks.json parsing + structural validation
-│   ├── styles.py             # Supported style set + task eligibility
+│   ├── styles.py             # Supported style set + task eligibility (input validation)
 │   ├── downloader.py         # Bounded, per-task failure-isolated downloads
 │   ├── video_inspection.py   # OpenCV readability + metadata extraction
 │   ├── frame_sampler.py      # Uniform sampling + sequential 1 fps fallback
-│   ├── cvr_client.py         # CVR prompt construction + Fireworks VLM client
+│   ├── cvr_client.py         # CVR prompt construction + Fireworks VLM client (config-swappable)
 │   ├── cvr_parser.py         # Strict JSON/CVR validation, no fact fabrication
-│   ├── style_generator.py    # CVR-only text requests for each requested style
-│   ├── caption_validation.py # Non-empty + concision (warn-only) validation
-│   ├── result_writer.py      # Atomic /output/results.json serialization
+│   ├── style_generator.py    # CVR-only text requests, all 4 styles unconditionally (gpt-oss-120b)
+│   ├── caption_validation.py # Validates all 4 captions; ~100-word warning-only
+│   ├── result_writer.py      # Atomic /output/results.json + requested-style filtering
 │   └── pipeline.py           # Sequential orchestration with failure isolation
 ├── tests/                    # pytest suite, one file per stage
-├── Dockerfile                # Runtime container image
+├── experiments/              # Dev-only MLflow experiment harness (not in Docker image)
+│   ├── run_experiment.py     # Single-run CLI
+│   ├── run_all.py            # Batch runner over configs/
+│   ├── harness.py            # Config loading + MLflow setup
+│   ├── configs/              # YAML experiment configs
+│   └── tests/                # Experiments test suite
+├── Dockerfile                # Runtime container image (src/ only)
 ├── requirements.txt          # Runtime dependencies only
 ├── fireworks_test_deployment.py  # Optional manual Fireworks sanity script
-└── AGENTS.md / DESIGN.md / video_captioning_agent_spec.md / TASKS.md
+└── AGENTS.md / DESIGN.md / video_captioning_agent_spec.md / TASKS.md / EXPERIMENT_TRACKING.md
 ```
 
 ---
