@@ -57,9 +57,9 @@ def test_run_all_isolates_per_config_failures_and_continues(
 
     monkeypatch.setattr(run_all, "load_config", fake_load_config)
     monkeypatch.setattr(run_all, "run_one_experiment", fake_run_one)
-    monkeypatch.setattr(run_all, "setup_mlflow", lambda *a, **kw: "file:./mlruns")
+    monkeypatch.setattr(run_all, "setup_mlflow", lambda *a, **kw: "sqlite:///mlruns")
 
-    summary = run_all_function(configs_dir, tracking_uri="file:./mlruns")
+    summary = run_all_function(configs_dir, tracking_uri="sqlite:///mlruns")
 
     assert summary["total"] == 3
     assert summary["succeeded"] == 2
@@ -75,9 +75,9 @@ def test_run_all_isolates_per_config_failures_and_continues(
 def test_run_all_handles_empty_configs_dir(tmp_path: Path, monkeypatch) -> None:
     configs_dir = tmp_path / "empty"
     configs_dir.mkdir()
-    monkeypatch.setattr(run_all, "setup_mlflow", lambda *a, **kw: "file:./mlruns")
+    monkeypatch.setattr(run_all, "setup_mlflow", lambda *a, **kw: "sqlite:///mlruns")
 
-    summary = run_all_function(configs_dir, tracking_uri="file:./mlruns")
+    summary = run_all_function(configs_dir, tracking_uri="sqlite:///mlruns")
 
     assert summary["total"] == 0
     assert summary["succeeded"] == 0

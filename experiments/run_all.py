@@ -6,7 +6,7 @@ is independent; one failing config logs the error and continues to the next.
 
 Usage:
     python experiments/run_all.py
-    python experiments/run_all.py --configs-dir experiments/configs --tracking-uri file:./experiments/mlruns
+    python experiments/run_all.py --configs-dir experiments/configs --tracking-uri sqlite:///experiments/mlflow.db
 
 This is dev-only tooling. It does not touch the /input->/output contract, the production
 pipeline, or the Docker image (Task 14). See EXPERIMENT_TRACKING.md.
@@ -41,7 +41,7 @@ def _build_arg_parser() -> argparse.ArgumentParser:
         "--tracking-uri",
         type=str,
         default=DEFAULT_TRACKING_URI,
-        help="MLflow tracking URI (file: scheme only; default: ./experiments/mlruns).",
+        help="MLflow tracking URI (sqlite: scheme; default: sqlite:///experiments/mlflow.db).",
     )
     return parser
 

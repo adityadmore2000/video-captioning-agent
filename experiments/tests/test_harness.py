@@ -179,8 +179,8 @@ def test_apply_overrides_with_empty_dict_returns_equivalent_config() -> None:
     assert overridden == base
 
 
-def test_setup_mlflow_uses_file_based_tracking_and_creates_experiment(tmp_path: Path) -> None:
-    tracking_uri = f"file:{tmp_path / 'mlruns'}"
+def test_setup_mlflow_uses_sqlite_tracking_and_creates_experiment(tmp_path: Path) -> None:
+    tracking_uri = f"sqlite:///{tmp_path / 'mlflow.db'}"
     import mlflow
 
     returned = setup_mlflow(tracking_uri)
@@ -191,6 +191,6 @@ def test_setup_mlflow_uses_file_based_tracking_and_creates_experiment(tmp_path: 
     assert experiment is not None
 
 
-def test_setup_mlflow_rejects_non_file_tracking_uri() -> None:
-    with pytest.raises(ValueError, match="file-based MLflow tracking"):
-        setup_mlflow("http://localhost:5000")
+def test_setup_mlflow_rejects_non_sqlite_tracking_uri() -> None:
+    with pytest.raises(ValueError, match="SQLite MLflow backend"):
+        setup_mlflow("file:./experiments/mlruns")

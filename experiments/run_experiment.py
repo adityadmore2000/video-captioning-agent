@@ -55,7 +55,7 @@ def _build_arg_parser() -> argparse.ArgumentParser:
         "--tracking-uri",
         type=str,
         default=DEFAULT_TRACKING_URI,
-        help="MLflow tracking URI (file: scheme only; defaults to ./experiments/mlruns).",
+        help="MLflow tracking URI (sqlite: scheme; default: sqlite:///experiments/mlflow.db).",
     )
     parser.add_argument("--video-path", type=str, default=None, help="Override config's video_path.")
     parser.add_argument("--num-frames", type=int, default=None, help="Override config's num_frames.")

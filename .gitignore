@@ -5,4 +5,5 @@ Data/
 .venv/
 firectl
 __pycache__
-experiments/mlruns/
+mlruns/
+mlflow.db

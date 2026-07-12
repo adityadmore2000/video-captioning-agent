@@ -208,10 +208,10 @@ This loops sequentially over every `*.yaml`/`*.yml` file in `experiments/configs
 
 ### View runs in the MLflow UI
 
-File-based tracking is used (no MLflow server process required):
+Tracking metadata lives in a local SQLite database; artifacts (logged prompts and CVR JSON) live as files under `./experiments/mlruns`. No `mlflow server` background process is required — `mlflow ui` with the SQLite backend is sufficient for this project's sequential, single-user use case:
 
 ```bash
-mlflow ui --backend-store-uri ./experiments/mlruns --port 5000
+mlflow ui --backend-store-uri sqlite:///experiments/mlflow.db --default-artifact-root ./experiments/mlruns
 ```
 
 Open `http://localhost:5000`, select the `video_captioning_cvr_experiments` experiment, and use the runs table (one row per run, params/metrics as columns) and the Compare view to diff configurations side by side. Each run's `system_prompt.txt`, `user_prompt_template.txt`, `cvr_output.json`, and `style_captions.json` are viewable as artifacts.

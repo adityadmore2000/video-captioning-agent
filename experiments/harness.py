@@ -13,7 +13,8 @@ import yaml
 
 
 EXPERIMENT_NAME = "video_captioning_cvr_experiments"
-DEFAULT_TRACKING_URI = "file:./experiments/mlruns"
+DEFAULT_TRACKING_URI = "sqlite:///experiments/mlflow.db"
+DEFAULT_ARTIFACT_ROOT = "./experiments/mlruns"
 
 
 @dataclass(frozen=True, slots=True)
@@ -168,29 +169,34 @@ def load_config(config_path: Path) -> ExperimentConfig:
     )
 
 
-def setup_mlflow(tracking_uri: str = DEFAULT_TRACKING_URI) -> str:
-    """Configure file-based MLflow tracking and ensure the experiment exists.
+def setup_mlflow(
+    tracking_uri: str = DEFAULT_TRACKING_URI, artifact_root: str = DEFAULT_ARTIFACT_ROOT
+) -> str:
+    """Configure SQLite-backed MLflow tracking and ensure the experiment exists.
 
-    Returns the resolved tracking URI so callers (and tests) can assert on it. Uses
-    file-based tracking by default — no MLflow server process is required for sequential
-    runs (see EXPERIMENT_TRACKING.md Open decisions: file-based ``mlflow ui``).
+    Returns the resolved tracking URI so callers (and tests) can assert on it.
 
-    MLflow 3.x gates the file store behind ``MLFLOW_ALLOW_FILE_STORE=true`` (it is in
-    maintenance mode upstream). We enable that env var here because file-based tracking is
-    the explicitly chosen mode for this sequential, no-server use case — the user does not
-    need to set it manually. Override ``tracking_uri`` with a ``sqlite:`` URI to use a DB
-    backend instead, which bypasses this gate entirely.
+    MLflow 3.x places the plain filesystem backend (``file:``) in maintenance mode and
+    raises on startup unless a database backend is used. This harness follows MLflow's
+    recommended path: tracking metadata lives in a local SQLite database
+    (``sqlite:///experiments/mlflow.db``), while artifacts (the logged prompts and CVR
+    JSON) still live as files under ``./experiments/mlruns``. This keeps the setup a
+    lightweight single-command local operation — ``mlflow ui`` with a SQLite backend is
+    sufficient for this project's sequential, single-user use case, and no
+    ``mlflow server`` background process is required. ``MLFLOW_ALLOW_FILE_STORE`` is
+    intentionally NOT set — following the database-backend recommendation keeps the
+    harness working on future MLflow versions.
     """
 
     import mlflow
 
-    if not tracking_uri.startswith("file:"):
+    if not tracking_uri.startswith("sqlite:"):
         raise ValueError(
-            "This harness uses file-based MLflow tracking; tracking_uri must start with 'file:'"
+            "This harness uses a SQLite MLflow backend; tracking_uri must start with 'sqlite:'"
         )
-    os.environ.setdefault("MLFLOW_ALLOW_FILE_STORE", "true")
     mlflow.set_tracking_uri(tracking_uri)
     mlflow.set_experiment(EXPERIMENT_NAME)
+    mlflow.set_registry_uri(tracking_uri)
     return tracking_uri
 
 

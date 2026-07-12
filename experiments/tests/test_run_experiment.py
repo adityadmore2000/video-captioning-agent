@@ -97,7 +97,7 @@ def _make_config(video_path: str) -> ExperimentConfig:
 def test_run_one_experiment_logs_cvr_and_style_artifacts_to_one_mlflow_run(
     tmp_path: Path, monkeypatch
 ) -> None:
-    tracking_uri = f"file:{tmp_path / 'mlruns'}"
+    tracking_uri = f"sqlite:///{tmp_path / 'mlflow.db'}"
     setup_mlflow(tracking_uri)
     video_path = _write_tiny_video(tmp_path / "fixture.mp4")
     config = _make_config(str(video_path))
@@ -158,7 +158,7 @@ def test_run_one_experiment_logs_cvr_and_style_artifacts_to_one_mlflow_run(
 def test_run_one_experiment_aborts_when_cvr_parse_fails(
     tmp_path: Path, monkeypatch
 ) -> None:
-    tracking_uri = f"file:{tmp_path / 'mlruns'}"
+    tracking_uri = f"sqlite:///{tmp_path / 'mlflow.db'}"
     setup_mlflow(tracking_uri)
     video_path = _write_tiny_video(tmp_path / "fixture.mp4")
     config = _make_config(str(video_path))
@@ -190,7 +190,7 @@ def test_run_one_experiment_aborts_when_cvr_parse_fails(
 
 
 def test_run_one_experiment_raises_when_video_file_missing(tmp_path: Path, monkeypatch) -> None:
-    tracking_uri = f"file:{tmp_path / 'mlruns'}"
+    tracking_uri = f"sqlite:///{tmp_path / 'mlflow.db'}"
     setup_mlflow(tracking_uri)
     config = _make_config(str(tmp_path / "does_not_exist.mp4"))
 
