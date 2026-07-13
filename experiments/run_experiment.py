@@ -51,6 +51,8 @@ from video_captioning_agent.cvr_client import CvrGenerationError, FireworksCvrCl
 from video_captioning_agent.cvr_parser import parse_cvr_response
 from video_captioning_agent.frame_sampler import sample_frames
 from video_captioning_agent.style_generator import (
+    CaptionGenerationFailure,
+    CaptionGenerationResult,
     FireworksStyleClient,
     generate_all_captions,
     StyleGenerationError,
@@ -164,13 +166,17 @@ def _run_cvr_stage(config: ExperimentConfig, video_path: Path) -> tuple[str, flo
 
 def _run_style_stage(
     config: ExperimentConfig, report: CanonicalVideoReport
-) -> tuple[dict[str, str], float]:
-    """Generate all 4 supported-style captions from the CVR; return (captions, latency).
+) -> tuple[CaptionGenerationResult, float]:
+    """Generate all 4 supported-style captions from the CVR; return (result, latency).
 
     Style system prompt (STYLE_SYSTEM_PROMPT in src/) is NOT user-configurable per
     EXPERIMENT_TRACKING.md's config schema — only CVR prompts and model/temperature/
     max_tokens for both stages are swappable. So this client omits the system_prompt kwarg
     and inherits the production default.
+
+    Returns the full :class:`CaptionGenerationResult` (all 4 captions plus per-style
+    failures with raw response bodies) so the caller can log diagnostics for any style
+    that failed — e.g. refusal-adjacent hedging or prose commentary from a smaller model.
     """
 
     style_client = FireworksStyleClient(
@@ -181,7 +187,20 @@ def _run_style_stage(
     start = time.perf_counter()
     result = generate_all_captions(style_client, report)
     latency = time.perf_counter() - start
-    return result.captions, latency
+    return result, latency
+
+
+def _failures_payload(failures: tuple[CaptionGenerationFailure, ...]) -> list[dict[str, object]]:
+    """Serialize per-style failures (including raw response bodies) for MLflow logging."""
+
+    return [
+        {
+            "style": failure.style,
+            "message": failure.message,
+            "raw_response": failure.raw_response,
+        }
+        for failure in failures
+    ]
 
 
 def run_one_experiment(
@@ -221,9 +240,14 @@ def run_one_experiment(
         report = parsed.report
         mlflow.log_dict(report.to_dict(), "cvr_output.json")
 
-        captions, style_latency = _run_style_stage(config, report)
+        captions_result, style_latency = _run_style_stage(config, report)
         mlflow.log_metric("style_latency_seconds", style_latency)
+        captions = captions_result.captions
         mlflow.log_dict(captions, "style_captions.json")
+        if captions_result.failures:
+            mlflow.log_dict(
+                _failures_payload(captions_result.failures), "style_failures.json"
+            )
 
         return {
             "run_id": run.info.run_id,
@@ -231,6 +255,7 @@ def run_one_experiment(
             "style_latency_seconds": style_latency,
             "cvr": report.to_dict(),
             "captions": captions,
+            "style_failures": _failures_payload(captions_result.failures),
         }
 
 

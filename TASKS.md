@@ -182,14 +182,14 @@ Serialize completed task captions to `/output/results.json`. This task is the **
 ## 13. Orchestrate per-task processing with failure isolation
 **Depends on:** tasks 2–12
 
-Create the executable pipeline that processes all tasks sequentially as: input → download → inspection/sampling → one CVR → requested captions → results. Catch expected task-level failures, preserve successful tasks, always write results, and return exit code 0 according to the agreed failure-output policy.
+Create the executable pipeline that processes all tasks sequentially as: input → download → inspection/sampling → one CVR → requested captions → results. The vision/CVR stage runs **one video at a time, in input order, on the calling thread**. Once a video's CVR is parsed, its style generation (Task 10) is dispatched as a **fire-and-collect background** `Future` on a bounded thread pool so it overlaps with the next video's frame sampling + CVR call, rather than blocking it. The pipeline does **not** await a task's style-generation call before starting the next task's VLM work; the vision stage is never restructured into bounded concurrency across all tasks. Each pending style-generation result is collected by its submission index and matched back to its `task_id` before serialization (Task 12). Task-level failure isolation holds across both stages: a task that fails before style generation (download/inspection/sampling/CVR/parse) yields empty captions at its slot, and a style-generation failure for task N is recorded for task N alone (also as empty captions) and never blocks or fails task N+1's processing. Catch expected task-level failures, preserve successful tasks, always write results, and return exit code 0 according to the agreed failure-output policy.
 
 **Acceptance criteria (from the specification):**
 - Reads every task, downloads every video, produces one internal CVR per video, generates every requested caption, writes valid results, and exits successfully.
 - Handles partial task failures.
-- Video understanding is performed exactly once per video.
+- Video understanding is performed exactly once per video (the VLM still processes videos sequentially and in order; only style generation runs concurrently with later VLM work).
 
-**Independent verification:** Add a mocked end-to-end pytest test covering two successful tasks and one failed task; assert a single vision call per successfully understood video, requested-style output, valid JSON, and exit code 0.
+**Independent verification:** Add mocked end-to-end pytest tests covering: (a) two successful tasks plus one that fails before the style stage, asserting a single vision call per successfully understood video, requested-style output, valid JSON, and exit code 0; (b) a video's in-flight style generation does not block the next video's CVR call (use a `threading.Event` to park style gen for N and confirm the next VLM call still fires); (c) style-generation results are matched back to their `task_id` and serialized in input order even when their background futures complete out of order; (d) a style-generation failure for task N is isolated — task N+1 still produces its full caption set.
 
 ## 14. Add container entrypoint and dependency definition
 **Depends on:** task 13

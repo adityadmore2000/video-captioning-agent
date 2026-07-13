@@ -31,25 +31,42 @@ claims. Produce one or two readable sentences in the requested style."""
 
 
 class StyleGenerationError(RuntimeError):
-    """Raised when Fireworks returns no usable caption text."""
+    """Raised when Fireworks returns no usable caption text.
+
+    When the failure is due to a malformed/unexpected response body (rather than a
+    transport error), ``raw`` carries the unparsed response text so callers can log
+    it for diagnostics (e.g. refusal-adjacent hedging, prose commentary, empty body).
+    """
+
+    def __init__(self, message: str, *, raw: str | None = None) -> None:
+        super().__init__(message)
+        self.raw = raw
 
 
 @dataclass(frozen=True, slots=True)
 class CaptionGenerationFailure:
-    """One non-fatal model failure associated with its style."""
+    """One non-fatal model failure associated with its style.
+
+    ``raw_response`` is the unparsed HTTP body captured on a malformed-response failure
+    (``None`` for transport/timeout failures that produced no body). It exists for
+    diagnostics only and is never used as a caption.
+    """
 
     style: str
     message: str
+    raw_response: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
 class CaptionGenerationResult:
-    """One raw caption per successfully generated supported style plus isolated failures.
+    """All 4 supported-style captions plus isolated per-style failures.
 
-    ``captions`` contains at most one entry per supported style; a style whose generation
-    failed is absent here rather than present with a placeholder. Task 11 fills in the
-    validation outcome (including empties for missing styles) and Task 12 filters the
-    validated set down to each task's requested styles.
+    ``captions`` always contains exactly one entry per supported style: the generated
+    caption on success, or the empty string on any failure (timeout, malformed
+    response, validation rejection, exception). No key is ever omitted. Task 11
+    validates this full 4-key set and Task 12 filters it down to each task's
+    requested styles, substituting ``""`` for any requested style absent from the
+    validated set.
     """
 
     captions: dict[str, str]
@@ -154,10 +171,16 @@ class FireworksStyleClient:
         response.raise_for_status()
         try:
             content = response.json()["choices"][0]["message"]["content"]
-        except (IndexError, KeyError, TypeError) as error:
-            raise StyleGenerationError("Fireworks response did not contain caption text") from error
+        except (IndexError, KeyError, TypeError, ValueError) as error:
+            raise StyleGenerationError(
+                "Fireworks response did not contain caption text",
+                raw=_safe_response_text(response),
+            ) from error
         if not isinstance(content, str):
-            raise StyleGenerationError("Fireworks caption content must be text")
+            raise StyleGenerationError(
+                "Fireworks caption content must be text",
+                raw=_safe_response_text(response),
+            )
         return content
 
 
@@ -169,14 +192,52 @@ def generate_all_captions(
     Always issues exactly ``len(SUPPORTED_STYLES)`` text-only requests (one per supported
     style) regardless of any task's requested-styles list. Each request receives only the
     serialized CVR — never frames, video URLs, or other metadata.
+
+    The returned ``captions`` dict always contains all 4 supported-style keys: the
+    generated caption on success, or the empty string on any failure (timeout, HTTP
+    error, malformed/empty response, or exception). No key is ever omitted, so a
+    failed style is represented as an empty string value (never an absent key) —
+    matching the Decision that Task 10 always returns the full 4-style set. The
+    structured ``failures`` tuple records the reason (and the raw response body where
+    one was produced) for diagnostics without altering the captions dict.
     """
 
     cvr_json = report.to_json()
-    captions: dict[str, str] = {}
+    captions: dict[str, str] = {style: "" for style in SUPPORTED_STYLES}
     failures: list[CaptionGenerationFailure] = []
     for style in SUPPORTED_STYLES:
         try:
             captions[style] = client.generate_caption(cvr_json, style)
         except (requests.RequestException, StyleGenerationError) as error:
-            failures.append(CaptionGenerationFailure(style=style, message=str(error)))
+            failures.append(
+                CaptionGenerationFailure(
+                    style=style,
+                    message=str(error),
+                    raw_response=_extract_raw_response(error),
+                )
+            )
     return CaptionGenerationResult(captions=captions, failures=tuple(failures))
+
+
+def _extract_raw_response(error: BaseException) -> str | None:
+    """Best-effort retrieval of the unparsed HTTP body carried by a style-generation error.
+
+    ``StyleGenerationError.raw`` is set by the client when a response body was present
+    but unusable (malformed/empty content). ``requests.HTTPError.response.text`` covers
+    non-2xx responses. Transport failures (timeout, connection error) carry no body and
+    yield ``None``.
+    """
+
+    raw = getattr(error, "raw", None)
+    if isinstance(raw, str):
+        return raw
+    response = getattr(error, "response", None)
+    text = getattr(response, "text", None)
+    return text if isinstance(text, str) else None
+
+
+def _safe_response_text(response: object) -> str | None:
+    """Return ``response.text`` when it is a real string (guarded for mocks)."""
+
+    text = getattr(response, "text", None)
+    return text if isinstance(text, str) else None
