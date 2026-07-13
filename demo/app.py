@@ -8,8 +8,14 @@ Run locally:
     streamlit run demo/app.py
 
 Or via Streamlit Community Cloud:
-    deploy from this GitHub repo, set FIREWORKS_API_KEY as a secret, main
-    file path = demo/app.py.
+    deploy from this GitHub repo, set the following as secrets (Manage app →
+    Settings → Secrets), and main file path = demo/app.py:
+
+        FIREWORKS_API_KEY="fw_..."
+        VISION_DEPLOYMENT_ID="accounts/.../deployments/<your-vision-deployment>"
+        STYLE_DEPLOYMENT_ID="accounts/.../deployments/<your-style-deployment>"
+
+Locally, the same values can be set as environment variables instead.
 """
 from __future__ import annotations
 
@@ -26,12 +32,17 @@ _SRC_DIR = _REPOSITORY_ROOT / "src"
 if str(_SRC_DIR) not in sys.path:
     sys.path.insert(0, str(_SRC_DIR))
 
-from video_captioning_agent.cvr_client import CvrGenerationError, FireworksCvrClient
+from video_captioning_agent.cvr_client import (
+    CvrGenerationError,
+    FireworksCvrClient,
+    VISION_MODEL_ID,
+)
 from video_captioning_agent.cvr_parser import parse_cvr_response
 from video_captioning_agent.frame_sampler import FrameSamplingError, sample_frames
 from video_captioning_agent.style_generator import (
     FireworksStyleClient,
     StyleGenerationError,
+    STYLE_MODEL_ID,
     generate_all_captions,
 )
 from video_captioning_agent.video_inspection import inspect_video
@@ -49,6 +60,17 @@ STYLE_COLORS = {
 STYLES = ("Formal", "Sarcastic", "Humorous-Tech", "Humorous-Non-Tech")
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+
+
+def _config_value(key: str, fallback: str) -> str:
+    """Read a config value from Streamlit secrets, then env, then fallback."""
+    try:
+        value = st.secrets.get(key)
+        if value:
+            return str(value)
+    except Exception:
+        pass
+    return os.environ.get(key, fallback)
 
 
 def main() -> None:
@@ -97,9 +119,12 @@ def _run_pipeline(video_path: Path) -> None:
             st.error(f"Frame sampling failed: {error}")
             return
 
+    vision_id = _config_value("VISION_DEPLOYMENT_ID", VISION_MODEL_ID)
+    style_id = _config_value("STYLE_DEPLOYMENT_ID", STYLE_MODEL_ID)
+
     with st.spinner("Generating Canonical Video Report (vision model)..."):
         try:
-            vision_client = FireworksCvrClient()
+            vision_client = FireworksCvrClient(model_id=vision_id)
             raw_cvr = vision_client.generate_cvr(frames, inspection.metadata)
         except CvrGenerationError as error:
             st.error(f"Vision model call failed: {error}")
@@ -112,7 +137,7 @@ def _run_pipeline(video_path: Path) -> None:
 
     with st.spinner("Generating captions in all 4 styles..."):
         try:
-            style_client = FireworksStyleClient()
+            style_client = FireworksStyleClient(model_id=style_id)
             result = generate_all_captions(style_client, parsed.report)
         except StyleGenerationError as error:
             st.error(f"Style generation failed: {error}")
