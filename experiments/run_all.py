@@ -19,6 +19,25 @@ import sys
 import traceback
 from pathlib import Path
 
+
+def _bootstrap_sys_path() -> None:
+    """Insert the repo's ``src/`` and ``experiments/`` dirs onto ``sys.path``.
+
+    ``run_experiment`` (imported below) also bootstraps, but this script imports the
+    harness directly so it bootstraps too. Resolved relative to this script's location so
+    it runs from any CWD without a manual ``PYTHONPATH``.
+    """
+
+    experiments_dir = Path(__file__).resolve().parent
+    repo_root = experiments_dir.parent
+    src_dir = repo_root / "src"
+    for path in (str(src_dir), str(experiments_dir)):
+        if path not in sys.path:
+            sys.path.insert(0, path)
+
+
+_bootstrap_sys_path()
+
 from run_experiment import run_one_experiment
 
 from harness import DEFAULT_TRACKING_URI, load_config, setup_mlflow

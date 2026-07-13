@@ -11,7 +11,7 @@
 # via `system_prompt_path` / `user_prompt_template_path` pointing at a separate
 # .md / .txt file relative to this config file. Provide exactly one form per prompt.
 
-name: exp_example_baseline
+name: exp_num_frames_1
 video_path: /home/aditya/dev-work/video-captioning-agent/Data/Charades_v1_480/Charades_v1_480/001YG.mp4
 
 system_prompt: |
@@ -52,16 +52,16 @@ user_prompt_template: |
   - If you cannot see something clearly, do not include it.
 
 frame_sampling:
-  num_frames: 16
+  num_frames: 1
   max_resolution: 768
   fallback_fps: 1
 
 cvr_model:
-  name: accounts/fireworks/models/qwen2p5-vl-32b-instruct
+  name: accounts/adityadmore2000-x698/deployments/gby0ppfz
   temperature: 0.1
   max_tokens: 1024
 
 style_model:
-  name: accounts/fireworks/models/gpt-oss-120b
+  name: accounts/adityadmore2000-x698/deployments/gby0ppfz
   temperature: 0.2
   max_tokens: 256

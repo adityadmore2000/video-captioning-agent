@@ -12,7 +12,7 @@ from typing import Any
 import yaml
 
 
-EXPERIMENT_NAME = "video_captioning_cvr_experiments"
+EXPERIMENT_NAME = "video_captioning_cvr_experiments_v2"
 DEFAULT_TRACKING_URI = "sqlite:///experiments/mlflow.db"
 DEFAULT_ARTIFACT_ROOT = "./experiments/mlruns"
 

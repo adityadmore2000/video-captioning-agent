@@ -23,6 +23,29 @@ import time
 from pathlib import Path
 from typing import Any
 
+
+def _bootstrap_sys_path() -> None:
+    """Insert the repo's ``src/`` and ``experiments/`` dirs onto ``sys.path``.
+
+    Imports the production pipeline package from ``src/`` and the harness from
+    ``experiments/`` without requiring the caller to set ``PYTHONPATH``. Paths are
+    resolved relative to this script's own location so it runs from any CWD.
+    """
+
+    experiments_dir = Path(__file__).resolve().parent
+    repo_root = experiments_dir.parent
+    src_dir = repo_root / "src"
+    for path in (str(src_dir), str(experiments_dir)):
+        if path not in sys.path:
+            sys.path.insert(0, path)
+
+
+_bootstrap_sys_path()
+
+from dotenv import load_dotenv
+
+load_dotenv()
+
 from video_captioning_agent.contracts import CanonicalVideoReport
 from video_captioning_agent.cvr_client import CvrGenerationError, FireworksCvrClient
 from video_captioning_agent.cvr_parser import parse_cvr_response
