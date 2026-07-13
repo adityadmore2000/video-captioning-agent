@@ -183,3 +183,20 @@ def test_style_request_uses_gpt_oss_120b_model_id() -> None:
 
     assert request["model"] == STYLE_MODEL_ID
     assert request["model"] == "accounts/fireworks/models/gpt-oss-120b"
+
+
+def test_style_system_prompt_directs_natural_prose_without_cvr_artifacts() -> None:
+    """The Task 10 rewrite prompt must forbid CVR-internal formatting in captions.
+
+    Guards against leaking the CVR's structured timeline field (timestamps, frame
+    numbers, "timestamp" labels) into human-readable captions. The instruction lives
+    on the style-generation prompt, not the CVR prompt, since it is specific to the
+    CVR-to-caption rewriting step.
+    """
+
+    from video_captioning_agent.style_generator import STYLE_SYSTEM_PROMPT
+
+    assert "timestamp" in STYLE_SYSTEM_PROMPT.lower()
+    assert "frame" in STYLE_SYSTEM_PROMPT.lower()
+    assert "natural" in STYLE_SYSTEM_PROMPT.lower()
+    assert "prose" in STYLE_SYSTEM_PROMPT.lower()

@@ -9,8 +9,11 @@ required empty-string value for any requested style it does not find here.
 
 import logging
 
+import pytest
+
 from video_captioning_agent.caption_validation import (
     CaptionValidationFailureKind,
+    CVR_LEAKAGE_PATTERN,
     LONG_CAPTION_WORD_WARNING_THRESHOLD,
     validate_all_captions,
 )
@@ -71,3 +74,55 @@ def test_runaway_length_logs_warning_without_rejecting_the_caption(caplog) -> No
     assert result.captions == expected
     assert result.failures == ()
     assert f"{LONG_CAPTION_WORD_WARNING_THRESHOLD + 1} words" in caplog.text
+
+
+@pytest.mark.parametrize(
+    "caption",
+    [
+        "At timestamp 0.0 s, a person sits at a desk.",
+        "By timestamp 30.6 s, the same individual stands up.",
+        "A person looks at a laptop, then by 13.1s shifts focus to a bag.",
+        "After 30.6 seconds the person stands up holding a blue bag.",
+        "A person unzips the bag at 4.4's into the video.",
+    ],
+)
+def test_cvr_leakage_pattern_detects_timestamp_references(caption: str) -> None:
+    assert CVR_LEAKAGE_PATTERN.search(caption), f"expected leakage match in: {caption!r}"
+
+
+@pytest.mark.parametrize(
+    "caption",
+    [
+        "A person in a blue shirt sits at a desk then shifts focus to a blue shopping bag.",
+        "Afterwards the individual examines the bag and eventually stands up holding it.",
+        "The second frame shows a desk with a laptop and a bed in the background.",
+        "Someone wearing a cap transitions from screen time to a hands-on bag adventure.",
+    ],
+)
+def test_cvr_leakage_pattern_does_not_flag_natural_prose(caption: str) -> None:
+    assert CVR_LEAKAGE_PATTERN.search(caption) is None, (
+        f"unexpected leakage match in natural prose: {caption!r}"
+    )
+
+
+def test_cvr_leakage_in_caption_logs_warning_without_rejecting(caplog) -> None:
+    captions = {style: f"{style} caption." for style in SUPPORTED_STYLES}
+    captions["Formal"] = "At timestamp 0.0 s, a person sits at a desk."
+
+    with caplog.at_level(logging.WARNING):
+        result = validate_all_captions(captions)
+
+    assert set(result.captions) == set(SUPPORTED_STYLES)
+    assert result.failures == ()
+    assert "leaks CVR-internal formatting" in caplog.text
+    assert "Formal" in caplog.text
+
+
+def test_natural_caption_logs_no_leakage_warning(caplog) -> None:
+    captions = {style: f"{style} caption." for style in SUPPORTED_STYLES}
+    captions["Formal"] = "A person sits at a desk then shifts focus to a blue shopping bag."
+
+    with caplog.at_level(logging.WARNING):
+        validate_all_captions(captions)
+
+    assert "leaks CVR-internal formatting" not in caplog.text

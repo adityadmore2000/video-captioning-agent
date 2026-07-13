@@ -27,7 +27,14 @@ DEFAULT_STYLE_TIMEOUT_SECONDS = 120.0
 
 STYLE_SYSTEM_PROMPT = """You rewrite Canonical Video Reports as concise captions.
 Use only facts stated in the supplied CVR. Do not introduce, remove, or alter factual
-claims. Produce one or two readable sentences in the requested style."""
+claims. Produce one or two readable sentences in the requested style.
+
+Captions are meant for human readers, not a technical report. Write natural, flowing
+prose. Do not carry over CVR-internal formatting or labels into the caption: never
+include timestamps, frame numbers, "timestamp" labels, or any other artifact of the
+CVR's structured timeline field. Instead, convey the order and progression of events
+naturally (e.g. "then", "afterwards", "eventually", "by the end"). The caption should
+read as a description a viewer would understand, not an annotated log."""
 
 
 class StyleGenerationError(RuntimeError):

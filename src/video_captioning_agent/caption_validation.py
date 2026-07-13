@@ -7,6 +7,9 @@ correctly associated with their style; generation failures are recorded per-styl
 ending unrelated work. Concision is a soft guideline only: a caption beyond ~100 words
 logs a warning (to flag clearly broken/runaway model output) but is never rejected — the
 spec's "approximately one to two sentences" is not a strict threshold worth enforcing.
+A separate warning-only CVR-leakage check flags captions that carry over CVR-internal
+artifacts (timestamps, "timestamp" labels) so the prompt can be tightened without adding
+strict enforcement or retry logic.
 """
 
 from __future__ import annotations
@@ -14,6 +17,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum
 import logging
+import re
 from typing import Mapping
 
 from .styles import SUPPORTED_STYLES, filter_supported_styles
@@ -21,6 +25,17 @@ from .styles import SUPPORTED_STYLES, filter_supported_styles
 
 LONG_CAPTION_WORD_WARNING_THRESHOLD = 100
 LOGGER = logging.getLogger(__name__)
+
+CVR_LEAKAGE_PATTERN = re.compile(
+    r"\btimestamp\b"
+    r"|\b\d+(?:\.\d+)?\s*'?s(?:ec(?:ond)?s?)?\b"
+)
+"""Matches CVR-internal formatting that should never appear in a human caption.
+
+Flags the literal word ``timestamp`` (e.g. "at timestamp 4.4s") and a numeric value
+followed by a seconds unit (e.g. "4.4s", "30.6 seconds", "0.0's"). Safe for general
+prose: plain words like "second" or "frame" without a leading number do not match.
+"""
 
 
 class CaptionValidationFailureKind(str, Enum):
@@ -76,6 +91,7 @@ def validate_all_captions(
         normalized = caption.strip()
         accepted[style] = normalized
         _warn_if_long(style, normalized)
+        _warn_if_leaking_cvr_artifacts(style, normalized)
 
     supported_style_set = set(supported_styles)
     for style in generated_captions:
@@ -92,6 +108,23 @@ def _warn_if_long(style: str, caption: str) -> None:
             "Caption for style %s is %d words; expected concise output.",
             style,
             word_count,
+        )
+
+
+def _warn_if_leaking_cvr_artifacts(style: str, caption: str) -> None:
+    """Log (never reject) if a caption carries CVR-internal formatting into prose.
+
+    Consistent with the loose word-count sanity check: flags timestamp labels and
+    numeric-with-seconds patterns (e.g. "at timestamp 4.4s", "30.6 seconds") so the
+    Task 10 prompt can be tightened without adding strict enforcement or retry logic.
+    """
+
+    match = CVR_LEAKAGE_PATTERN.search(caption)
+    if match:
+        LOGGER.warning(
+            "Caption for style %s leaks CVR-internal formatting (%r); expected natural prose.",
+            style,
+            match.group(0),
         )
 
 
