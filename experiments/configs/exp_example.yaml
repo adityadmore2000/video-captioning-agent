@@ -57,11 +57,11 @@ frame_sampling:
   fallback_fps: 1
 
 cvr_model:
-  name: accounts/adityadmore2000-x698/deployments/x5x3h9hz
+  name: accounts/adityadmore2000-x698/deployments/lf5r25lg
   temperature: 0.1
   max_tokens: 1024
 
 style_model:
-  name: accounts/adityadmore2000-x698/deployments/hygjjnsr
+  name: accounts/adityadmore2000-x698/deployments/v575ufos
   temperature: 0.2
   max_tokens: 2048
