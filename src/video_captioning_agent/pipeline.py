@@ -94,11 +94,13 @@ def run_pipeline(
     their tasks by submission index before serialization (Task 12).
     """
 
+    explicit_model = os.environ.get("FIREWORKS_VISION_MODEL")
     deployment_manager: FireworksDeploymentManager | None = None
     deployment_name = os.environ.get("FIREWORKS_VISION_DEPLOYMENT_NAME") or None
 
     if (
-        vision_client is None
+        not explicit_model
+        and vision_client is None
         and deployment_name
         and os.environ.get("FIREWORKS_VISION_BASE_MODEL")
     ):
@@ -115,10 +117,29 @@ def run_pipeline(
                 manager=deployment_manager,
             )
             vision_client = FireworksCvrClient(model_id=vision_model_id)
+            if deployment_manager is not None:
+                LOGGER.info(
+                    "Vision deployment ready: %s. "
+                    "Add FIREWORKS_VISION_MODEL=%s to .env to skip provisioning on future runs.",
+                    vision_model_id,
+                    vision_model_id,
+                )
         style_client = style_client or FireworksStyleClient()
 
     loaded_tasks = load_tasks(input_path)
+    if loaded_tasks.load_errors:
+        for error in loaded_tasks.load_errors:
+            LOGGER.error("Input loading failed: %s", error)
+        write_results([], output_path)
+        return 1
     if not loaded_tasks.tasks:
+        if loaded_tasks.task_errors:
+            LOGGER.warning(
+                "All %d task(s) were invalid; nothing to process.",
+                len(loaded_tasks.task_errors),
+            )
+            for error in loaded_tasks.task_errors:
+                LOGGER.warning("  %s", error)
         write_results([], output_path)
         return 0
 

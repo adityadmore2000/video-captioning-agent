@@ -287,9 +287,20 @@ class FireworksDeploymentManager:
             existing = self._find_deployment(account_id, deployment_name)
             if existing is not None:
                 return existing
-            raise DeploymentProvisioningError(
-                f"Fireworks reported {deployment_name} already exists but it is not listable"
-            )
+            try:
+                ref = self._get_deployment(account_id, deployment_name)
+            except DeploymentProvisioningError:
+                raise DeploymentProvisioningError(
+                    f"Fireworks reported {deployment_name} already exists "
+                    "but it is not listable or fetchable"
+                )
+            if ref.state in _TERMINAL_FAILURE_STATES:
+                raise DeploymentProvisioningError(
+                    f"Deployment {deployment_name} exists in terminal state {ref.state}. "
+                    "Choose a different deployment name or wait for the 7-day purge window."
+                )
+            current = {"name": ref.name, "baseModel": ref.base_model, "state": ref.state}
+            return self._wait_for_ready(account_id, deployment_name, current)
         if response.status_code >= 400:
             raise _provisioning_error_from_response(
                 f"Create deployment {deployment_name} failed",

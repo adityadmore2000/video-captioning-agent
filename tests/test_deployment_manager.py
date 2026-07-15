@@ -248,10 +248,11 @@ def test_create_409_with_no_listable_deployment_raises() -> None:
         MockResponse(200, {"deployments": [], "nextPageToken": ""}),
         MockResponse(409, {"error": {"code": "ALREADY_EXISTS", "message": "exists"}}),
         MockResponse(200, {"deployments": [], "nextPageToken": ""}),
+        MockResponse(404, {"error": {"code": "NOT_FOUND", "message": "deployment not found"}}),
     ]
     manager = _build_manager(session)
 
-    with pytest.raises(DeploymentProvisioningError, match="not listable"):
+    with pytest.raises(DeploymentProvisioningError, match="not listable or fetchable"):
         manager.resolve_vision_model(
             deployment_name=DEPLOYMENT_NAME,
             base_model=BASE_MODEL_BARE,

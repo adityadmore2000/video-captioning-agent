@@ -26,7 +26,8 @@ def test_load_tasks_reads_a_valid_multi_task_file(tmp_path: Path) -> None:
 
     assert [task.task_id for task in result.tasks] == ["v1", "v2"]
     assert result.tasks[1].styles == ("Formal",)
-    assert result.errors == ()
+    assert result.load_errors == ()
+    assert result.task_errors == ()
 
 
 def test_load_tasks_accepts_an_empty_task_list(tmp_path: Path) -> None:
@@ -43,8 +44,9 @@ def test_load_tasks_handles_malformed_json(tmp_path: Path) -> None:
     result = load_tasks(input_path)
 
     assert result.tasks == ()
-    assert len(result.errors) == 1
-    assert "Unable to read tasks" in result.errors[0]
+    assert len(result.load_errors) == 1
+    assert result.task_errors == ()
+    assert "Unable to read tasks" in result.load_errors[0]
 
 
 def test_load_tasks_skips_every_task_with_a_duplicate_id(tmp_path: Path) -> None:
@@ -57,7 +59,8 @@ def test_load_tasks_skips_every_task_with_a_duplicate_id(tmp_path: Path) -> None
     result = load_tasks(input_path)
 
     assert [task.task_id for task in result.tasks] == ["valid"]
-    assert result.errors == ("Skipping duplicate task_id: duplicate",)
+    assert result.load_errors == ()
+    assert result.task_errors == ("Skipping duplicate task_id: duplicate",)
 
 
 @pytest.mark.parametrize("missing_field", ["task_id", "video_url", "styles"])
@@ -72,8 +75,9 @@ def test_load_tasks_skips_tasks_with_missing_required_fields(
     result = load_tasks(input_path)
 
     assert result.tasks == ()
-    assert len(result.errors) == 1
-    assert missing_field in result.errors[0]
+    assert result.load_errors == ()
+    assert len(result.task_errors) == 1
+    assert missing_field in result.task_errors[0]
 
 
 @pytest.mark.parametrize(
@@ -91,5 +95,6 @@ def test_load_tasks_skips_tasks_with_invalid_field_types(
     result = load_tasks(input_path)
 
     assert result.tasks == ()
-    assert len(result.errors) == 1
-    assert field in result.errors[0]
+    assert result.load_errors == ()
+    assert len(result.task_errors) == 1
+    assert field in result.task_errors[0]

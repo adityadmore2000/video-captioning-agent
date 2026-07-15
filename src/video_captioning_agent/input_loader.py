@@ -17,10 +17,19 @@ LOGGER = logging.getLogger(__name__)
 
 @dataclass(frozen=True, slots=True)
 class InputLoadResult:
-    """Valid tasks plus non-fatal structural errors encountered while loading."""
+    """Valid tasks plus diagnostic details from the loading pass.
+
+    ``load_errors`` captures fatal problems that prevent the input from being
+    read at all (e.g. missing file, invalid JSON, wrong top-level type).
+
+    ``task_errors`` captures per-entry validation warnings that occurred after
+    the input was successfully loaded; processing of any valid tasks should
+    continue.
+    """
 
     tasks: tuple[VideoTask, ...]
-    errors: tuple[str, ...]
+    load_errors: tuple[str, ...]
+    task_errors: tuple[str, ...]
 
 
 def load_tasks(path: Path = INPUT_TASKS_PATH) -> InputLoadResult:
@@ -36,22 +45,22 @@ def load_tasks(path: Path = INPUT_TASKS_PATH) -> InputLoadResult:
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
         message = f"Unable to read tasks from {path}: {error}"
         LOGGER.warning(message)
-        return InputLoadResult(tasks=(), errors=(message,))
+        return InputLoadResult(tasks=(), load_errors=(message,), task_errors=())
 
     if not isinstance(payload, list):
         message = f"Task input at {path} must be a JSON array"
         LOGGER.warning(message)
-        return InputLoadResult(tasks=(), errors=(message,))
+        return InputLoadResult(tasks=(), load_errors=(message,), task_errors=())
 
     valid_tasks: list[VideoTask] = []
-    errors: list[str] = []
+    task_errors: list[str] = []
     for index, raw_task in enumerate(payload):
         try:
             valid_tasks.append(VideoTask.from_dict(raw_task))
         except ContractValidationError as error:
             message = f"Skipping task at index {index}: {error}"
             LOGGER.warning(message)
-            errors.append(message)
+            task_errors.append(message)
 
     task_id_counts = Counter(task.task_id for task in valid_tasks)
     duplicate_ids = {task_id for task_id, count in task_id_counts.items() if count > 1}
@@ -59,7 +68,11 @@ def load_tasks(path: Path = INPUT_TASKS_PATH) -> InputLoadResult:
         for task_id in sorted(duplicate_ids):
             message = f"Skipping duplicate task_id: {task_id}"
             LOGGER.warning(message)
-            errors.append(message)
+            task_errors.append(message)
         valid_tasks = [task for task in valid_tasks if task.task_id not in duplicate_ids]
 
-    return InputLoadResult(tasks=tuple(valid_tasks), errors=tuple(errors))
+    return InputLoadResult(
+        tasks=tuple(valid_tasks),
+        load_errors=(),
+        task_errors=tuple(task_errors),
+    )
