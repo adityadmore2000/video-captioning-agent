@@ -139,7 +139,7 @@ class FireworksStyleClient:
         session: requests.Session | None = None,
         *,
         system_prompt: str = STYLE_SYSTEM_PROMPT,
-        model_id: str = STYLE_MODEL_ID,
+        model_id: str | None = None,
         temperature: float = STYLE_TEMPERATURE,
         max_tokens: int = STYLE_MAX_TOKENS,
     ) -> None:
@@ -149,7 +149,11 @@ class FireworksStyleClient:
         self._timeout_seconds = timeout_seconds
         self._session = session or requests.Session()
         self._system_prompt = system_prompt
-        self._model_id = model_id
+        self._model_id = (
+            model_id
+            or os.environ.get("FIREWORKS_STYLE_MODEL")
+            or STYLE_MODEL_ID
+        )
         self._temperature = temperature
         self._max_tokens = max_tokens
 

@@ -35,6 +35,10 @@ There is no formal test suite yet. For now, validate changes with the closest ru
 
 Git history currently contains only `initial commit`, so use concise imperative commit messages going forward, for example `Add frame sampler fallback` or `Document Fireworks setup`. Pull requests should include a short summary, commands run, required environment variables, linked issue or task context, and any dataset/model assumptions. Include screenshots or sample JSON only when output format or visual behavior changes.
 
+## File Operations
+
+Never remove or delete any file without the user's explicit written permission.
+
 ## Security & Configuration Tips
 
 Never commit `.env`, API keys, signed upload URLs, model weights, or large dataset files. Read `FIREWORKS_API_KEY` from the environment. Keep hardcoded local paths limited to throwaway analysis scripts, and document any required external tools such as `ffprobe`.

@@ -3,7 +3,10 @@ import threading
 import time
 from pathlib import Path
 
+import pytest
+
 from video_captioning_agent.contracts import FrameSample, VideoMetadata, VideoTask
+from video_captioning_agent.deployment_manager import DeploymentProvisioningError
 from video_captioning_agent.downloader import (
     DownloadFailure,
     DownloadFailureKind,
@@ -346,3 +349,36 @@ def test_pipeline_isolates_style_generation_failure_from_next_video(
         {"task_id": "v1", "captions": {"formal": ""}},
         {"task_id": "v2", "captions": {"sarcastic": "Sarcastic caption from v2."}},
     ]
+
+
+def test_pipeline_provisioning_failure_is_fatal(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A vision deployment provisioning failure is fatal — it raises before
+    any task-processing logic executes, matching the architecture where
+    provisioning is container initialization, not task-level degradation.
+    """
+
+    input_path = tmp_path / "tasks.json"
+    output_path = tmp_path / "output" / "results.json"
+    _write_two_tasks(input_path)
+    downloader, inspector, sampler = _make_fakes(tmp_path)
+
+    def _raise(*, manager=None) -> str:
+        raise DeploymentProvisioningError("provisioning boom")
+
+    import video_captioning_agent.pipeline as pipeline_module
+
+    monkeypatch.setattr(pipeline_module, "resolve_vision_model_id", _raise)
+
+    with pytest.raises(DeploymentProvisioningError, match="provisioning boom"):
+        run_pipeline(
+            input_path=input_path,
+            output_path=output_path,
+            vision_client=None,
+            style_client=_MarkerAwareStyleClient(),
+            downloader=downloader,
+            inspector=inspector,
+            sampler=sampler,
+        )

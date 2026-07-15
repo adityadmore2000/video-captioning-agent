@@ -12,7 +12,12 @@ Or via Streamlit Community Cloud:
     Settings → Secrets), and main file path = demo/app.py:
 
         FIREWORKS_API_KEY="fw_..."
-        VISION_DEPLOYMENT_ID="accounts/.../deployments/<your-vision-deployment>"
+        # Option A (automatic provisioning): the demo provisions/reuses a
+        # deployment of the base VLM on first run — no dashboard work needed.
+        FIREWORKS_VISION_BASE_MODEL="qwen2.5-vl-32b-instruct"
+        FIREWORKS_VISION_DEPLOYMENT_NAME="video-captioning-vlm"
+        # Option B (pre-deployed): point directly at an existing model id.
+        # FIREWORKS_VISION_MODEL="accounts/.../deployments/<your-vision-deployment>"
         STYLE_DEPLOYMENT_ID="accounts/.../deployments/<your-style-deployment>"
 
 Locally, the same values can be set as environment variables instead.
@@ -32,12 +37,19 @@ _SRC_DIR = _REPOSITORY_ROOT / "src"
 if str(_SRC_DIR) not in sys.path:
     sys.path.insert(0, str(_SRC_DIR))
 
+from video_captioning_agent._env import load_env_file
 from video_captioning_agent.cvr_client import (
     CvrGenerationError,
     FireworksCvrClient,
     VISION_MODEL_ID,
 )
 from video_captioning_agent.cvr_parser import parse_cvr_response
+from video_captioning_agent.deployment_manager import (
+    DEFAULT_MAX_REPLICAS,
+    DEFAULT_MIN_REPLICAS,
+    DeploymentProvisioningError,
+    FireworksDeploymentManager,
+)
 from video_captioning_agent.frame_sampler import FrameSamplingError, sample_frames
 from video_captioning_agent.style_generator import (
     FireworksStyleClient,
@@ -47,6 +59,7 @@ from video_captioning_agent.style_generator import (
 )
 from video_captioning_agent.video_inspection import inspect_video
 
+load_env_file()
 
 SAMPLE_VIDEO = Path(__file__).resolve().parent / "sample_data" / "001YG.mp4"
 
@@ -71,6 +84,50 @@ def _config_value(key: str, fallback: str) -> str:
     except Exception:
         pass
     return os.environ.get(key, fallback)
+
+
+def _resolve_vision_model() -> str:
+    """Resolve the vision model id with auto-provisioning support.
+
+    Precedence (secrets then env at each step):
+    1. ``FIREWORKS_VISION_MODEL`` — use a pre-existing model id directly.
+    2. ``FIREWORKS_VISION_DEPLOYMENT_NAME`` + ``FIREWORKS_VISION_BASE_MODEL``
+       — provision/reuse a deployment via ``FireworksDeploymentManager``.
+    3. ``VISION_DEPLOYMENT_ID`` — legacy pre-deployed secret/env (fallback).
+    4. ``VISION_MODEL_ID`` constant.
+    """
+    explicit = _config_value("FIREWORKS_VISION_MODEL", "")
+    if explicit:
+        return explicit
+
+    deployment_name = _config_value("FIREWORKS_VISION_DEPLOYMENT_NAME", "")
+    base_model = _config_value("FIREWORKS_VISION_BASE_MODEL", "")
+    if deployment_name and base_model:
+        api_key = _config_value("FIREWORKS_API_KEY", "")
+        try:
+            manager = FireworksDeploymentManager(api_key=api_key or None)
+            with st.spinner("Provisioning vision deployment (first run may take several minutes)..."):
+                _raw_lt = _config_value("FIREWORKS_VISION_LOAD_TARGET", "")
+                _raw_min = _config_value("FIREWORKS_VISION_MIN_REPLICAS", "")
+                _raw_max = _config_value("FIREWORKS_VISION_MAX_REPLICAS", "")
+                _raw_ac = _config_value("FIREWORKS_VISION_ACCELERATOR_COUNT", "")
+                accelerator_type = _config_value("FIREWORKS_VISION_ACCELERATOR_TYPE", "") or None
+                accelerator_count = int(_raw_ac) if _raw_ac and accelerator_type else None
+                return manager.resolve_vision_model(
+                    deployment_name=deployment_name,
+                    base_model=base_model,
+                    min_replicas=int(_raw_min) if _raw_min else DEFAULT_MIN_REPLICAS,
+                    max_replicas=int(_raw_max) if _raw_max else DEFAULT_MAX_REPLICAS,
+                    deployment_shape=_config_value("FIREWORKS_VISION_DEPLOYMENT_SHAPE", "") or None,
+                    accelerator_type=accelerator_type,
+                    accelerator_count=accelerator_count,
+                    load_target=float(_raw_lt) if _raw_lt else None,
+                )
+        except DeploymentProvisioningError as error:
+            st.error(f"Vision deployment provisioning failed: {error}")
+            raise
+
+    return _config_value("VISION_DEPLOYMENT_ID", VISION_MODEL_ID)
 
 
 def main() -> None:
@@ -119,8 +176,12 @@ def _run_pipeline(video_path: Path) -> None:
             st.error(f"Frame sampling failed: {error}")
             return
 
-    vision_id = _config_value("VISION_DEPLOYMENT_ID", VISION_MODEL_ID)
     style_id = _config_value("STYLE_DEPLOYMENT_ID", STYLE_MODEL_ID)
+
+    try:
+        vision_id = _resolve_vision_model()
+    except DeploymentProvisioningError:
+        return
 
     with st.spinner("Generating Canonical Video Report (vision model)..."):
         try:

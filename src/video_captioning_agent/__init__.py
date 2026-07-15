@@ -1,5 +1,6 @@
 """Video captioning agent package."""
 
+from ._env import load_env_file
 from .contracts import (
     CanonicalVideoReport,
     FrameSample,
@@ -31,6 +32,14 @@ from .caption_validation import (
     CaptionValidationFailureKind,
     CaptionValidationResult,
     validate_all_captions,
+)
+from .deployment_manager import (
+    DEFAULT_PROVISION_POLL_INTERVAL_SECONDS,
+    DEFAULT_PROVISION_TIMEOUT_SECONDS,
+    DeploymentProvisioningError,
+    DeploymentRef,
+    FireworksDeploymentManager,
+    resolve_vision_model_id,
 )
 from .input_loader import InputLoadResult, load_tasks
 from .downloader import (
@@ -82,14 +91,19 @@ __all__ = [
     "CvrParseFailure",
     "CvrParseFailureKind",
     "CvrParseResult",
+    "DEFAULT_PROVISION_POLL_INTERVAL_SECONDS",
+    "DEFAULT_PROVISION_TIMEOUT_SECONDS",
     "DEFAULT_VISION_TIMEOUT_SECONDS",
     "DEFAULT_DOWNLOAD_TIMEOUT_SECONDS",
     "DEFAULT_STYLE_TIMEOUT_SECONDS",
+    "DeploymentProvisioningError",
+    "DeploymentRef",
     "DownloadFailure",
     "DownloadFailureKind",
     "DownloadResult",
     "FIREWORKS_URL",
     "FireworksCvrClient",
+    "FireworksDeploymentManager",
     "FrameSamplingError",
     "FireworksStyleClient",
     "FrameSample",
@@ -127,7 +141,9 @@ __all__ = [
     "sample_frames",
     "filter_supported_styles",
     "generate_all_captions",
+    "resolve_vision_model_id",
     "validate_all_captions",
     "write_results",
     "inspect_video",
+    "load_env_file",
 ]

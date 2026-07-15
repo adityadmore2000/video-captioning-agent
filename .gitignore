@@ -7,3 +7,4 @@ firectl
 __pycache__
 mlruns/
 mlflow.db
+output/

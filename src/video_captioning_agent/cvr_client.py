@@ -150,7 +150,7 @@ class FireworksCvrClient:
         *,
         system_prompt: str = CVR_SYSTEM_PROMPT,
         user_prompt_template: str = CVR_USER_PROMPT_TEMPLATE,
-        model_id: str = VISION_MODEL_ID,
+        model_id: str | None = None,
         temperature: float = VISION_TEMPERATURE,
         max_tokens: int = VISION_MAX_TOKENS,
     ) -> None:
@@ -161,7 +161,11 @@ class FireworksCvrClient:
         self._session = session or requests.Session()
         self._system_prompt = system_prompt
         self._user_prompt_template = user_prompt_template
-        self._model_id = model_id
+        self._model_id = (
+            model_id
+            or os.environ.get("FIREWORKS_VISION_MODEL")
+            or VISION_MODEL_ID
+        )
         self._temperature = temperature
         self._max_tokens = max_tokens
 

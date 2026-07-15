@@ -15,12 +15,14 @@ from __future__ import annotations
 
 from concurrent.futures import Future, ThreadPoolExecutor
 import logging
+import os
 from pathlib import Path
 import tempfile
 from typing import Callable
 
 import requests
 
+from ._env import load_env_file
 from .caption_validation import validate_all_captions
 from .contracts import (
     CanonicalVideoReport,
@@ -31,6 +33,11 @@ from .contracts import (
 )
 from .cvr_client import CvrGenerationError, FireworksCvrClient
 from .cvr_parser import parse_cvr_response
+from .deployment_manager import (
+    DeploymentProvisioningError,
+    FireworksDeploymentManager,
+    resolve_vision_model_id,
+)
 from .downloader import DownloadResult, download_video
 from .frame_sampler import FrameSamplingError, sample_frames
 from .input_loader import INPUT_TASKS_PATH, load_tasks
@@ -73,7 +80,11 @@ def run_pipeline(
 ) -> int:
     """Process all structurally valid tasks and always return exit code zero.
 
-    Any task-level problem yields empty strings for that task's requested output
+    Provisioning (if configured) runs first as container initialization —
+    before any task loading. A provisioning failure is fatal and propagates
+    to the caller, since infrastructure failures are not task-level degradation.
+
+    Task-level problems yield empty strings for that task's requested output
     styles, preserving successfully completed tasks and the mandated output schema.
 
     The vision (CVR) stage is processed one video at a time, in input order, on
@@ -83,20 +94,33 @@ def run_pipeline(
     their tasks by submission index before serialization (Task 12).
     """
 
+    deployment_manager: FireworksDeploymentManager | None = None
+    deployment_name = os.environ.get("FIREWORKS_VISION_DEPLOYMENT_NAME") or None
+
+    if (
+        vision_client is None
+        and deployment_name
+        and os.environ.get("FIREWORKS_VISION_BASE_MODEL")
+    ):
+        LOGGER.info(
+            "Auto-provisioning vision deployment %s from base model %s",
+            deployment_name,
+            os.environ.get("FIREWORKS_VISION_BASE_MODEL"),
+        )
+        deployment_manager = FireworksDeploymentManager()
+
+    if vision_client is None or style_client is None:
+        if vision_client is None:
+            vision_model_id = resolve_vision_model_id(
+                manager=deployment_manager,
+            )
+            vision_client = FireworksCvrClient(model_id=vision_model_id)
+        style_client = style_client or FireworksStyleClient()
+
     loaded_tasks = load_tasks(input_path)
     if not loaded_tasks.tasks:
         write_results([], output_path)
         return 0
-
-    if vision_client is None or style_client is None:
-        try:
-            vision_client = vision_client or FireworksCvrClient()
-            style_client = style_client or FireworksStyleClient()
-        except ValueError as error:
-            LOGGER.error("Pipeline model client is unavailable: %s", error)
-            results = [build_task_result(task, {}) for task in loaded_tasks.tasks]
-            write_results(results, output_path)
-            return 0
 
     tasks = loaded_tasks.tasks
     results: list[TaskResult | None] = [None] * len(tasks)
@@ -104,43 +128,51 @@ def run_pipeline(
 
     with tempfile.TemporaryDirectory(prefix="video-captioning-") as temporary_directory:
         run_directory = Path(temporary_directory)
-        with ThreadPoolExecutor(
-            max_workers=max(1, style_workers),
-            thread_name_prefix="style-generation",
-        ) as executor:
-            for index, task in enumerate(tasks):
-                eligibility = determine_task_eligibility(task)
-                if not eligibility.supported_styles:
-                    results[index] = build_task_result(task, {})
-                    continue
+        try:
+            with ThreadPoolExecutor(
+                max_workers=max(1, style_workers),
+                thread_name_prefix="style-generation",
+            ) as executor:
+                for index, task in enumerate(tasks):
+                    eligibility = determine_task_eligibility(task)
+                    if not eligibility.supported_styles:
+                        results[index] = build_task_result(task, {})
+                        continue
 
-                cvr_report = _run_vision_stage(
-                    task,
-                    run_directory,
-                    vision_client,
-                    downloader,
-                    inspector,
-                    sampler,
-                )
-                if cvr_report is None:
-                    results[index] = build_task_result(task, {})
-                    continue
-
-                future = executor.submit(
-                    _run_style_stage, task, cvr_report, style_client
-                )
-                pending_style.append((index, task, future))
-
-            for index, task, future in pending_style:
-                try:
-                    results[index] = future.result()
-                except Exception as error:  # noqa: BLE001 - isolate per task
-                    LOGGER.warning(
-                        "Style generation failed for task %s: %s",
-                        task.task_id,
-                        error,
+                    cvr_report = _run_vision_stage(
+                        task,
+                        run_directory,
+                        vision_client,
+                        downloader,
+                        inspector,
+                        sampler,
                     )
-                    results[index] = build_task_result(task, {})
+                    if cvr_report is None:
+                        results[index] = build_task_result(task, {})
+                        continue
+
+                    future = executor.submit(
+                        _run_style_stage, task, cvr_report, style_client
+                    )
+                    pending_style.append((index, task, future))
+
+                for index, task, future in pending_style:
+                    try:
+                        results[index] = future.result()
+                    except Exception as error:  # noqa: BLE001 - isolate per task
+                        LOGGER.warning(
+                            "Style generation failed for task %s: %s",
+                            task.task_id,
+                            error,
+                        )
+                        results[index] = build_task_result(task, {})
+        finally:
+            if (
+                deployment_manager is not None
+                and deployment_name
+                and os.environ.get("FIREWORKS_VISION_TEARDOWN")
+            ):
+                deployment_manager.teardown(deployment_name)
 
     final_results: list[TaskResult] = [
         result if result is not None else build_task_result(task, {})
@@ -206,9 +238,14 @@ def _run_style_stage(
 
 
 def main() -> int:
-    """Run the pipeline at the required `/input` and `/output` locations."""
+    """Run the pipeline with provisioning handled as container initialization."""
 
-    return run_pipeline()
+    load_env_file()
+    try:
+        return run_pipeline()
+    except (ValueError, DeploymentProvisioningError) as error:
+        LOGGER.error("Provisioning failed: %s", error)
+        return 1
 
 
 if __name__ == "__main__":
